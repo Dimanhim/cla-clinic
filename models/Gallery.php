@@ -22,11 +22,12 @@ use Yii;
  */
 class Gallery extends BaseModel
 {
-    const TYPE_ORDER          = 1;
-    const TYPE_IMAGE          = 2;
-    const TYPE_CLIENT         = 3;
+    const TYPE_PIPELINE       = 1;
+    const TYPE_STEP           = 2;
+    const TYPE_CLINIC         = 3;
+    const TYPE_DOCTOR         = 4;
 
-    const TYPE_ANY            = 15;
+    const TYPE_ANY            = 99;
 
     /**
      * {@inheritdoc}
@@ -84,9 +85,10 @@ class Gallery extends BaseModel
     public static function getTypes()
     {
         return [
-            self::TYPE_ORDER               => 'Заявки',
-            self::TYPE_IMAGE               => 'Изображения',
-            self::TYPE_CLIENT              => 'Клиенты',
+            self::TYPE_PIPELINE            => 'Воронки',
+            self::TYPE_STEP                => 'Этапы',
+            self::TYPE_CLINIC              => 'Клиники',
+            self::TYPE_DOCTOR              => 'Врачи',
         ];
     }
 

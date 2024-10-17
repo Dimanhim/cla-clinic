@@ -187,7 +187,7 @@ class BaseModel extends ActiveRecord
     /**
      * @return mixed
      */
-    public function findSearch()
+    public static function findSearch()
     {
         return self::className()::find()->where(['is', 'deleted', null])->orderBy(['position' => 'SORT ASC', 'id' => 'SORT DESC']);
     }

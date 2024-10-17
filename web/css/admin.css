@@ -373,3 +373,13 @@ th.required:after
 }
 /* END ALERT */
 
+.select2-container--krajee-bs4 .select2-selection--multiple .select2-search--inline .select2-search__field
+{
+    margin: auto;
+    width: 0 !important;
+    min-width: 0 !important;
+}
+.select2-container .select2-selection--multiple .select2-selection__rendered {
+    white-space: pre-wrap;
+}
+
