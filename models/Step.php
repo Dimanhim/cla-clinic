@@ -73,4 +73,22 @@ class Step extends \app\models\BaseModel
     {
         return $this->hasOne(Pipeline::className(), ['id' => 'pipeline_id']);
     }
+
+    /**
+     * @return array
+     */
+    public static function getListWithPipeline()
+    {
+        $data = [];
+        if($steps = self::findModels()->all()) {
+            foreach($steps as $step) {
+                $item = '';
+                $pipelineName = $step->pipeline ? $step->pipeline->name : '';
+                $item .= $pipelineName . ' / ';
+                $item .= $step->name;
+                $data[$step->id] = $item;
+            }
+        }
+        return $data;
+    }
 }

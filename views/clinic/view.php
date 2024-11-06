@@ -39,7 +39,16 @@ $this->params['breadcrumbs'][] = $this->title;
                 'format' => 'raw',
                 'value' => function($data) {
                     if($models = $data->createSteps) {
-                        return $data->getListChunk($models);
+                        $str = '<ul>';
+                        foreach($models as $model) {
+                            $listName = '';
+                            $pipelineName = $model->pipeline ? $model->pipeline->name : '';
+                            $listName .= $pipelineName . ' / ';
+                            $listName .= $model->name;
+                            $str .= "<li>{$listName}</li>";
+                        }
+                        $str .= '</ul>';
+                        return $str;
                     }
                 }
             ],
@@ -48,6 +57,16 @@ $this->params['breadcrumbs'][] = $this->title;
                 'format' => 'raw',
                 'value' => function($data) {
                     if($models = $data->updateSteps) {
+                        $str = '<ul>';
+                        foreach($models as $model) {
+                            $listName = '';
+                            $pipelineName = $model->pipeline ? $model->pipeline->name : '';
+                            $listName .= $pipelineName . ' / ';
+                            $listName .= $model->name;
+                            $str .= "<li>{$listName}</li>";
+                        }
+                        $str .= '</ul>';
+                        return $str;
                         return $data->getListChunk($models);
                     }
                 }
