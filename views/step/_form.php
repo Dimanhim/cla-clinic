@@ -20,7 +20,7 @@ use kartik\select2\Select2;
             <div class="card">
                 <div class="card-body">
                     <?= $form->field($model, 'pipeline_id')->widget(Select2::className(), [
-                        'data' => Pipeline::getList(),
+                        'data' => Pipeline::getList(true),
                         'options' => [
                             'prompt' => '[Не выбрано]',
                         ],
@@ -29,6 +29,10 @@ use kartik\select2\Select2;
                     <?= $form->field($model, 'name')->textInput(['maxlength' => true]) ?>
 
                     <?= $form->field($model, 'amo_id')->textInput() ?>
+
+                    <?= $form->field($model, 'amo_status')->checkbox() ?>
+
+                    <?= $form->field($model, 'mis_status')->checkbox() ?>
 
                     <?= $form->field($model, 'is_active')->checkbox() ?>
 

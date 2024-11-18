@@ -8,7 +8,7 @@ use yii\web\Controller;
 use yii\web\Response;
 use yii\filters\VerbFilter;
 use app\models\LoginForm;
-use app\models\ContactForm;
+use app\components\AmoCrmWorkspace;
 
 class SiteController extends Controller
 {
@@ -59,7 +59,32 @@ class SiteController extends Controller
             return $this->redirect(['login']);
         }*/
 
+        /*$amo = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
+        echo "<pre>";
+        print_r($amo);
+        echo "</pre>";
+        exit;*/
+
+        /*$config = Yii::$app->webhookConfig->getConfig();
+
+        echo "<pre>";
+        print_r($config);
+        echo "</pre>";
+        exit;*/
         return $this->render('index');
+    }
+
+    public function actionRedirect()
+    {
+
+        return $this->render('redirect');
+    }
+
+    public function actionInfo()
+    {
+        //return true;
+        $client = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
+        $client->setAccessToken();
     }
 
     /**

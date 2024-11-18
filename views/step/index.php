@@ -40,6 +40,14 @@ $this->params['breadcrumbs'][] = $this->title;
             ],
             'amo_id',
             [
+                'attribute' => 'amo_status',
+                'format' => 'boolean',
+            ],
+            [
+                'attribute' => 'mis_status',
+                'format' => 'boolean',
+            ],
+            [
                 'attribute' => 'is_active',
                 'format' => 'boolean',
             ],

@@ -49,7 +49,7 @@ class Step extends \app\models\BaseModel
     {
         return array_merge(parent::rules(), [
             [['name', 'pipeline_id', 'amo_id'], 'required'],
-            [['amo_id'], 'integer'],
+            [['amo_id', 'amo_status', 'mis_status'], 'integer'],
             [['name'], 'string', 'max' => 255],
         ]);
     }
@@ -63,6 +63,8 @@ class Step extends \app\models\BaseModel
             'name' => 'Название',
             'pipeline_id' => 'Воронка',
             'amo_id' => 'Amo ID',
+            'amo_status' => 'Для создания сделки в АМО',
+            'mis_status' => 'Для создания визита в МИС',
         ]);
     }
 

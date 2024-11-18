@@ -1,0 +1,1507 @@
+<?php
+
+namespace app\components;
+
+use AmoCRM\Helpers\CustomFieldHelper;
+
+trait ActionWebHook
+{
+    /**
+     * ловит хук на создание сделки
+     * получает сделку и отправляет ее в МИС
+     */
+    public function actionCreateAppointment()
+    {
+        if(
+            isset($this->requestBody['leads']) and
+            isset($this->requestBody['leads']['add']) and
+            isset($this->requestBody['leads']['add'][0])
+        ) {
+            $this->_lead_values = $this->requestBody['leads']['add'][0];
+
+            // проверяем, обрабатывать ли эту сделку - воронка, клиника
+            $this->checkFilterLead();
+
+
+
+            if(!$this->hasErrors()) {
+
+                $this->addMessage('----------------------------------------------------------');
+                $this->addMessage($this->method);
+
+                $this->setAppActionRelation();
+
+                // устанавливает контакт _contact этой сделки
+                $this->setContact();
+
+                $this->addMessage('Установлен контакт create-appointment');
+
+                if(!$this->hasErrors()) {
+                    $this->_lead = [
+                        'lead_id' => $this->_lead_values['id'],
+                        'lead_name' => $this->_lead_values['name'],
+                        'doctor_id' => $this->getDoctorId(),
+                        'doctor' => $this->getDoctorName(),
+                        'clinic_id' => $this->getClinicId(),
+                        'clinic' => $this->getClinicName(),
+                        'consultation_datetime' => $this->getDateTime(),
+                        'consultation_type' => $this->getConsultationType(),
+                        'consultation_type_id' => $this->getConsultationTypeId(),
+                        'budget' => $this->_lead_values['price'],
+                        'pipeline_status' => $this->getPipelineStatus(),
+                        'client_name' => $this->getContactAttribute('contact_name'),
+                        'client_phone' => $this->getContactAttribute('contact_phone'),
+                        'client_email' => $this->getContactAttribute('contact_email'),
+                        'client_birthday' => $this->getContactAttribute('contact_birthday'),
+                        'client_gender' => $this->getClientGender(),
+                    ];
+
+                    $this->setLog('', $this->_lead, 'webhook-create-log');
+
+                    $this->addMessage('Создана сделка '.$this->_lead_values['id'].', записан веб-хук');
+
+                    // на основе сделки создает визит в МИС
+
+                    $this->createMisAppointment();
+                }
+            }
+            else {
+                return $this->getResult();
+            }
+        }
+        else {
+            $this->addError('Веб-хук не найден или не обрабатывается', true);
+        }
+        return $this->getResult();
+    }
+
+    /**
+     *
+     */
+    public function setAppActionRelation()
+    {
+        $this->setAppCreatedRelation();
+        $this->setAppUpdatedRelation();
+        $this->setHookUpdate();
+    }
+
+    /**
+     * @return mixed
+     */
+    public function setAppUpdatedRelation()
+    {
+        if(!file_exists($this->_app_updated_filename)) {
+            file_put_contents($this->_app_updated_filename, '');
+        }
+        if($content = file_get_contents($this->_app_updated_filename)) {
+            if(json_decode($content, true)) return $this->getResult();
+            $this->_app_updated = json_decode($content, true);
+            $this->addMessage('Установлено свойство _app_updated');
+        }
+    }
+
+    public function setHookUpdate()
+    {
+        if(!file_exists($this->_update_hook_filename)) {
+            file_put_contents($this->_update_hook_filename, '');
+        }
+        if($content = file_get_contents($this->_update_hook_filename)) {
+            $this->_update_hook = json_decode($content, true);
+            $this->addMessage('Установлено свойство _hook_update');
+        }
+    }
+
+    /**
+     * @param $leadId
+     */
+    public function setLeadIdToUpdateRelation($leadId)
+    {
+        file_put_contents($this->_app_updated_filename, json_encode(['lead_id' => $leadId]));
+        $this->addMessage('В файл _app_updated установлен lead_id '.$leadId);
+    }
+
+    /**
+     *
+     */
+    public function removeAppUpdatedRelation()
+    {
+        file_put_contents($this->_app_updated_filename, '');
+    }
+
+    /**
+     *
+     */
+    public function setAppCreatedRelation()
+    {
+        if(!file_exists($this->_app_created_filename)) {
+            file_put_contents($this->_app_created_filename, '');
+        }
+        if($content = file_get_contents($this->_app_created_filename)) {
+            $this->addMessage('Установлено свойство _app_created');
+            $this->_app_created = json_decode($content, true);
+        }
+    }
+
+    /**
+     * @param array $values
+     * @return bool|mixed
+     */
+    public function setAppointmentRelationValues($values = [])
+    {
+        if(!$values) {
+            $this->addError('пустой массив передан в setAppointmentRelationValues', true);
+            return $this->getResult();
+        }
+
+        $content = [];
+
+        if($fileContent = file_get_contents($this->_app_created_filename)) {
+            $content = json_decode($fileContent, true);
+        }
+
+        $amoLeadId = array_key_first($values);
+        $misAppointmentId = $values[$amoLeadId];
+        if(!$amoLeadId or !$misAppointmentId) return false;
+
+        $content[$amoLeadId] = $misAppointmentId;
+
+        file_put_contents($this->_app_created_filename, json_encode($content));
+        $this->addMessage('В файл установлен новый визит '.$amoLeadId.' - '.$misAppointmentId);
+        $this->setAppCreatedRelation();
+
+    }
+
+    /**
+     *  ловит хук на обновление сделки
+     *  редактирует ее в МИС, если соблюдены условия
+     */
+    public function actionUpdateAppointment()
+    {
+        //$this->addMessage('Статус сделки изменен');
+        //$this->addMessage($this->requestBody);
+        if(
+            isset($this->requestBody['leads']) and
+            isset($this->requestBody['leads']['update']) and
+            isset($this->requestBody['leads']['update'][0])
+        ) {
+            $this->_lead_values = $this->requestBody['leads']['update'][0];
+
+            //$this->checkLeadAppointment();
+
+
+            // проверяем, обрабатывать ли эту сделку
+            $this->checkFilterLead();
+
+            if(!$this->hasErrors()) {
+
+                $this->addMessage('----------------------------------------------------------');
+                $this->addMessage($this->method);
+
+                $this->setAppActionRelation();
+
+                // устанавливает контакт _contact этой сделки
+                $this->setContact();
+
+                $this->addMessage('Установлен контакт update-appointment');
+
+                $this->setLeadIdToUpdateRelation($this->_lead_values['id']);
+
+                $this->_lead = [
+                    'lead_id' => $this->_lead_values['id'],
+                    'lead_name' => $this->_lead_values['name'],
+                    'doctor_id' => $this->getDoctorId(),
+                    'doctor' => $this->getDoctorName(),
+                    'clinic_id' => $this->getClinicId(),
+                    'clinic' => $this->getClinicName(),
+                    'consultation_datetime' => $this->getDateTime(),
+                    'consultation_type' => $this->getConsultationType(),
+                    'consultation_type_id' => $this->getConsultationTypeId(),
+                    'budget' => $this->_lead_values['price'],
+                    'pipeline_status' => $this->getPipelineStatus(),
+                    'pipeline_status_id' => $this->_lead_values['status_id'],
+                    'client_name' => $this->getContactAttribute('contact_name'),
+                    'client_phone' => $this->getContactAttribute('contact_phone'),
+                    'client_email' => $this->getContactAttribute('contact_email'),
+                    'client_birthday' => $this->getContactAttribute('contact_birthday'),
+                    'client_gender' => $this->getClientGender(),
+                    'mis_id' => $this->getMisId(),
+                ];
+
+                $this->setAppointmentByMisId();
+
+                $this->addMessage('Обновляется сделка _lead_values '.$this->_lead_values['id']);
+                $this->addMessage($this->_lead_values);
+                $this->addMessage('_lead');
+                $this->addMessage($this->_lead);
+
+                $this->updateMisAppointment();
+            }
+        }
+        return $this->getResult();
+    }
+
+    public function actionUpdateStatusLead()
+    {
+        if(
+            isset($this->requestBody['leads']) and
+            isset($this->requestBody['leads']['status']) and
+            isset($this->requestBody['leads']['status'][0])
+        ) {
+            $this->_lead_values = $this->requestBody['leads']['status'][0];
+
+            // проверяем, обрабатывать ли эту сделку
+            $this->checkFilterLead();
+
+            if(!$this->hasErrors()) {
+
+                $this->addMessage('----------------------------------------------------------');
+                $this->addMessage($this->method);
+                $this->addMessage('_lead_values');
+                $this->addMessage($this->_lead_values);
+
+                $this->setAppActionRelation();
+
+                // устанавливает контакт _contact этой сделки
+                $this->setContact();
+
+                $this->addMessage('Установлен контакт update-appointment');
+
+                $this->setLeadIdToUpdateRelation($this->_lead_values['id']);
+
+                $this->_lead = [
+                    'lead_id' => $this->_lead_values['id'],
+                    'lead_name' => $this->_lead_values['name'],
+                    'doctor_id' => $this->getDoctorId(),
+                    'doctor' => $this->getDoctorName(),
+                    'clinic_id' => $this->getClinicId(),
+                    'clinic' => $this->getClinicName(),
+                    'consultation_datetime' => $this->getDateTime(),
+                    'consultation_type' => $this->getConsultationType(),
+                    'consultation_type_id' => $this->getConsultationTypeId(),
+                    'budget' => $this->_lead_values['price'],
+                    'pipeline_status' => $this->getPipelineStatus(),
+                    'pipeline_status_id' => $this->_lead_values['status_id'],
+                    'client_name' => $this->getContactAttribute('contact_name'),
+                    'client_phone' => $this->getContactAttribute('contact_phone'),
+                    'client_email' => $this->getContactAttribute('contact_email'),
+                    'client_birthday' => $this->getContactAttribute('contact_birthday'),
+                    'client_gender' => $this->getClientGender(),
+                    'mis_id' => $this->getMisId(),
+                ];
+
+                $this->addMessage('_lead');
+                $this->addMessage($this->_lead);
+
+                $this->setAppointmentByMisId();
+
+                $this->addMessage('Обновляется сделка '.$this->_lead_values['id']);
+
+                if($this->_lead_values['status_id'] == $this->params['update_status'] and !$this->_lead['mis_id']) {
+                    $this->addMessage('Создается визит в МИС');
+                    $this->createMisAppointment('update-status');
+                }
+            }
+        }
+        return $this->getResult();
+    }
+
+    /**
+     * обновляет визит в МИС на основе сделки
+     *
+     * @return bool
+     */
+    public function updateMisAppointment()
+    {
+        if($this->hasErrors()) return $this->getResult();
+
+        if(!$this->_lead) {
+            $this->addError('Лид для обновления не найден', true);
+            return $this->getResult();
+        }
+
+        if(!$this->_appointment) {
+            $this->addError('Сделка для обновления в МИС не найдена', true);
+            return $this->getResult();
+        }
+
+        if($this->_appointment['status_id'] == 5) {
+            $this->addError('Найденная сделка уже отменена', true);
+            return $this->getResult();
+        }
+
+        // проверяем изменились ли контролируемые поля
+        if($changedParam = $this->checkUpdatedParams()) {
+            $this->addMessage('Найдены измененные поля сделки '.$this->_lead_values['id'].' - '.$changedParam);
+            $this->createMisAppointment('update');
+        }
+        else {
+            $this->addMessage('Измененные поля сделки '.$this->_lead_values['lead_id'].' не найдены');
+        }
+        return $this->getResult();
+    }
+
+    /**
+     * проверяет изменились ли контролируемые поля
+     *
+     * @return bool
+     */
+    public function checkUpdatedParams()
+    {
+        $controlParams = [
+            //'doctor_id',
+            'time_start',
+            //'time_end',
+            //'clinic_id',
+            //'last_comment',
+        ];
+
+        foreach($controlParams as $controlParam) {
+            switch ($controlParam) {
+                case 'doctor_id' : {
+                    $amoParam = $this->_lead['doctor_id'];
+                    $misParam = null;
+                    foreach($this->params['doctors'] as $doctor) {
+                        if($doctor['amo_id'] == $amoParam) {
+                            $misParam = $doctor['mis_id'];
+                            break;
+                        }
+                    }
+                    if($misParam and $misParam != $this->_appointment['doctor_id']) {
+                        return 'doctor_id';
+                    }
+                }
+                    continue 2;
+                case 'time_start' : {
+                    $amoParam = date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600) ;
+                    $this->addMessage('appointment time_start - '. $this->_appointment['time_start']);
+                    $this->addMessage('amo param time_start - '. $amoParam);
+                    if(strtotime($amoParam) != strtotime($this->_appointment['time_start'])) {
+                        $this->addMessage('time_start');
+                        return 'time_start';
+                    }
+                }
+                    continue 2;
+                case 'time_end' : {
+                    $amoParam = date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600 + $this->params['time'] * 60);
+                    if($amoParam != $this->_appointment['time_end']) {
+                        return 'time_end';
+                    }
+                }
+                    continue 2;
+                case 'last_comment' : {
+                    $amoParam = $this->_lead['consultation_type'];
+                    if($amoParam != $this->_appointment['last_comment']) {
+                        return 'last_comment';
+                    }
+                }
+                    continue 2;
+
+            }
+        }
+
+        return false;
+    }
+
+    /*public function checkLeadAppointment()
+    {
+        if(!$lead = $this->_lead_values) {
+            $this->addError('Лид в вебхуке не найден');
+            return $this->getResult();
+        }
+
+        if(!$this->_app_created) {
+            $this->addError('app_created не установлен');
+            return $this->getResult();
+        }
+
+        if(isset($this->_app_created[$this->_lead_values['id']])) {
+            $this->addError('Сделка '.$this->_lead_values['id'].' уже обрабатывалась', true);
+            return $this->getResult();
+        }
+    }*/
+
+    /**
+     * проверяет, обрабатывать ли сделку
+     *
+     * @param $lead
+     * @return bool
+     */
+    public function checkFilterLead()
+    {
+        if(!$lead = $this->_lead_values) {
+            $this->addError('Лид в вебхуке не найден');
+            return false;
+        }
+
+        // проверяем воронку
+        if(isset($lead['pipeline_id'])) {
+
+            if($lead['pipeline_id'] == $this->params['pipeline_id']) {
+
+                if($this->hasErrors()) return false;
+
+                // если хук на изменение, проверяем еще и статусы (этапы) воронки
+                if($this->method == 'update-appointment') {
+                    if(!array_key_exists($lead['status_id'], $this->params['edit_statuses'])) {
+                        $this->addError('Сделка находится в неконтролируемом статусе '.$lead['status_id']);
+                        return false;
+                    }
+                }
+
+                // проверяем клинику
+                $amoClinicId = $this->getClinicId($lead);
+
+                if($this->params and isset($this->params['clinic_id'])) {
+                    if($this->params['clinic_id'] != $amoClinicId) {
+                        $this->addError('Данная клиника не обрабатывается '.$amoClinicId);
+                        return false;
+                    }
+                    return true;
+                }
+                $this->addError('Воронка не задана в конфиге');
+                return false;
+            }
+
+            $this->addError('Данная воронка не обрабатывается '.$lead['pipeline_id']);
+            return false;
+        }
+
+        $this->addError('Воронка не задана в ответе сделки', true);
+        return false;
+    }
+
+    /**
+     * @return bool
+     */
+    public function checkAppointmentRelation()
+    {
+        if($this->method == 'create-appointment') {
+            if(isset($this->_app_created[$this->_lead['lead_id']])) {
+                $this->addError('Сделка '.$this->_lead['lead_id'].' уже обрабатывалась', true);
+                return $this->getResult();
+            }
+        }
+        elseif($this->method == 'update-appointment') {
+            if(!isset($this->_app_created[$this->_lead['lead_id']])) {
+                $this->addError('Сделка '.$this->_lead['lead_id'].' не добавлялась', true);
+                return $this->getResult();
+            }
+            else {
+                $this->cancelAppointment();
+            }
+            //if($this->_app_updated) {
+            //    $this->addError('Сделка еще не обработана');
+            //    return false;
+            //}
+            //else
+            //{
+            //$this->cancelAppointment();
+            //}
+        }
+    }
+
+    /**
+     * создает визит в МИС
+     * @return bool
+     */
+    public function createMisAppointment($from = 'create')
+    {
+        $this->addMessage('Метод createMisAppointment - '.$from);
+
+        if(!$this->_lead) {
+            $this->addError('при создании визита лид _lead не найден', true);
+            return $this->getResult();
+        }
+
+        if($from == 'update-status') {
+            $this->deleteErrors();
+            if(array_key_exists($this->_lead_values['id'], $this->_app_created)) {
+                $this->addError('Визит к сделке '.$this->_lead_values['id']. ' уже создавался в системе', true);
+                return $this->getResult();
+            }
+        }
+        else {
+            $this->checkAppointmentRelation();
+        }
+
+
+        if($this->hasErrors()) return $this->getResult();
+
+        $params = $this->getParamsForCreateMisAppointment();
+
+        $this->addMessage('$params:');
+        $this->addMessage($params);
+
+        $misRequest = $this->api->createAppointment($params);
+
+        if($misRequest and isset($misRequest['data']) and !is_array($misRequest['data'])) {
+            $appointmentId = $misRequest['data'];
+
+            $this->addMessage('Создан визит с ID '.$appointmentId);
+
+            // отправляем ID визита обратно в АМО
+            $this->setAppointmentIdToAmo($appointmentId, $from);
+        }
+        else {
+            $this->addMessage('misRequest error:');
+            $this->addMessage($misRequest);
+        }
+
+        return $this->getResult();
+    }
+
+    /**
+     * @return array
+     */
+    public function getParamsForCreateMisAppointment()
+    {
+        $params = [
+            //'first_name' => $this->_lead['client_name'],
+            'birth_date' => date('d.m.Y', $this->_lead['client_birthday'] + 6 * 3600),
+            'mobile' => $this->_lead['client_phone'],
+            'gender' => $this->_lead['client_gender'] ? ($this->_lead['client_gender'] == 'М' ? 1 : 2) : null,
+            'email' => $this->_lead['client_email'],
+            'doctor_id' => $this->getMisDoctorId(),
+            'time_start' => date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600),
+            'time_end' => date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600 + $this->params['time'] * 60),
+            'clinic_id' => $this->getMisClinicId(),
+            'is_handled' => true,
+        ];
+        if(isset($this->_contact['name']) and $this->_contact['name']) {
+            $params['first_name'] = $this->_contact['name'];
+        }
+        if(isset($this->_contact['surname']) and $this->_contact['surname']) {
+            $params['last_name'] = $this->_contact['surname'];
+        }
+        if(isset($this->_contact['fathername']) and $this->_contact['fathername']) {
+            $params['third_name'] = $this->_contact['fathername'];
+        }
+        if(!isset($params['first_name']) and !isset($params['last_name']) and !isset($params['third_name'])) {
+            $params['first_name'] = $this->_lead['client_name'];
+        }
+
+        if($patientId = $this->getPatientIdByEmailPhone()) {
+            $params['patient_id'] = $patientId;
+        }
+
+        if($this->_canceled_appointment_id) {
+            $params['moved_from'] = $this->_canceled_appointment_id;
+        }
+
+        if(isset($this->_lead['consultation_type'])) {
+            $params['comment'] = $this->_lead['consultation_type'];
+        }
+
+        return $params;
+    }
+
+    /**
+     * @return bool|string
+     */
+    public function getPatientIdByEmailPhone()
+    {
+        if(!$this->_contact_full) {
+            $this->addError('не установлен _contact_full');
+            return false;
+        }
+
+        // 1-й запрос ФИО + телефон
+        if(
+            isset($this->_contact_full['phone']) and
+            isset($this->_contact_full['fio'])
+        ) {
+            $params = [
+                'mobile' => $this->_contact_full['phone'],
+                'first_name' => $this->_contact_full['fio']
+            ];
+            if($patient = $this->getFirstPatient($params)) {
+                if(trim($patient['patient_id'])) {
+                    return trim($patient['patient_id']);
+                }
+            }
+        }
+        if(
+            isset($this->_contact_full['phone']) and
+            isset($this->_contact_full['name']) and
+            isset($this->_contact_full['surname']) and
+            isset($this->_contact_full['fathername'])
+        ) {
+            $firstName = $this->_contact_full['surname'] . ' ' . $this->_contact_full['name'] . ' ' . $this->_contact_full['fathername'];
+
+            $params = [
+                'mobile' => $this->_contact_full['phone'],
+                'first_name' => $firstName,
+            ];
+            if($patient = $this->getFirstPatient($params)) {
+                if(trim($patient['patient_id'])) {
+                    return trim($patient['patient_id']);
+                }
+            }
+        }
+        if(
+            isset($this->_contact_full['phone']) and
+            isset($this->_contact_full['email'])
+        ) {
+            $params = [
+                'mobile' => $this->_contact_full['phone'],
+                'email' => $this->_contact_full['email'],
+            ];
+            if($patient = $this->getFirstPatient($params)) {
+                if(trim($patient['patient_id'])) {
+                    return trim($patient['patient_id']);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array $params
+     * @return bool
+     */
+    public function getFirstPatient($params = [])
+    {
+        $patient = $this->api->getPatient($params);
+
+        if(
+            $patient and
+            isset($patient['data']) and
+            $patient['data'] and
+            is_array($patient['data'])
+        ) {
+            if(isset($patient['data'][0])) {
+                return $patient['data'][0];
+            }
+            elseif(isset($patient['data']['patient_id'])) {
+                return $patient['data'];
+            }
+
+        }
+        return false;
+    }
+
+    /**
+     * @return bool
+     */
+    public function cancelAppointment()
+    {
+        if(!isset($this->_app_created[$this->_lead['lead_id']])) {
+            $this->addError('Сделка для отмены не найдена по lead_id '.$this->_lead['lead_id'], true);
+            return $this->getResult();
+        }
+        $appointmentIdForCancel = $this->_app_created[$this->_lead['lead_id']];
+        $this->_canceled_appointment_id = $appointmentIdForCancel;
+
+        $canceledAppointment = $this->api->cancelAppointment(['appointment_id' => $appointmentIdForCancel]);
+
+        if(!$canceledAppointment or !isset($canceledAppointment['data']) or !$canceledAppointment['data'] or is_array($canceledAppointment['data'])) {
+            $this->addError('Невозможно отменить визит', true);
+            return $this->getResult();
+        }
+
+        $this->addMessage('Отменен визит '.$appointmentIdForCancel);
+    }
+
+    /**
+     * отправляет appointment_id обратно в Amo
+     * @param integer $appointmentId
+     */
+    public function setAppointmentIdToAmo($appointmentId, $from)
+    {
+        $params = [
+            'id' => $this->_lead['lead_id'],
+            'custom_fields_values' => [
+                [
+                    'field_id' => $this->params['mis_field_id'],
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                    'values' => [
+                        [
+                            'value' => $appointmentId,
+                        ]
+                    ]
+                ],
+                [
+                    'field_id' => $this->params['mis_status_name'],
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_SELECT,
+                    'values' => [
+                        [
+                            'value' => $this->_mis_statuses[1],
+                        ]
+                    ]
+                ],
+            ],
+        ];
+        /*if($from == 'create') {
+            $params['custom_fields_values'][] = [
+                'field_id' => $this->params['mis_status_name'],
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_SELECT,
+                'values' => [
+                    [
+                        'value' => $this->_mis_statuses[1],
+                    ]
+                ]
+            ];
+        }*/
+        $result = $this->amo->updateLead($params);
+        $this->setAppointmentRelationValues([$this->_lead['lead_id'] => $appointmentId]);
+        $this->addMessage('Результат отправки appointmentId='.$appointmentId.' в АМО - ');
+        $this->addMessage($result->getId());
+
+        return $this->getResult();
+    }
+
+    /**
+     * устанавлявает визит по MIS ID
+     *
+     * @return bool
+     */
+    public function setAppointmentByMisId()
+    {
+        if($this->_appointment or !isset($this->_lead['mis_id']) or !$this->_lead['mis_id']) {
+            $this->addError('Визит по mis_id ' . $this->_lead['mis_id'] . ' не найден', true);
+            return false;
+        };
+
+        if($request = $this->api->getAppointments(['appointment_id' => $this->_lead['mis_id']])) {
+            if(isset($request['data']) and isset($request['data'][0])) {
+                $this->_appointment = $request['data'][0];
+            }
+            else {
+                $this->addError('Визит по mis_id ' . $this->_lead['mis_id'] . ' некорректен', true);
+                return false;
+            }
+        }
+        if($this->_appointment) {
+            $this->addMessage('Установлен _appointment');
+            $this->addMessage($this->_appointment);
+        }
+    }
+
+    /**
+     * получает значение параметра в МИС
+     * по параметру из АМО
+     * в конфигах
+     *
+     * @param null $paramId
+     * @param string $attribute
+     * @return bool|mixed
+     */
+    public function getMisParamId($paramId = null, $attribute = '')
+    {
+        if($this->params and isset($this->params[$attribute])) {
+            foreach($this->params[$attribute] as $item) {
+                if($item['amo_id'] and $item['amo_id'] == $paramId) {
+                    return $item['mis_id'];
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * получает id врача в МИС
+     * по его ID из АМО
+     *
+     * @param null $amoDoctorId
+     * @return bool|mixed
+     */
+    public function getMisDoctorId()
+    {
+        return $this->getMisParamId($this->_lead['doctor_id'], 'doctors');
+    }
+
+    /**
+     * получает id клиники из МИС
+     * из конфига
+     *
+     * @return mixed|null
+     */
+    public function getMisClinicId()
+    {
+        if($this->params and isset($this->params['clinic_mis_id'])) {
+            return $this->params['clinic_mis_id'];
+        }
+        return null;
+    }
+
+    /**
+     * устанавливает контакт по MIS ID
+     */
+    public function setContact()
+    {
+        if(!$this->_lead_values) {
+            $this->addError('setContact Lead ID не найден, контакт не установлен');
+            return false;
+        }
+
+        $leadId = $this->_lead_values['id'];
+
+        // получаем сделку
+        $lead = $this->amo->getLead($leadId);
+
+        // получаем ID ее главного контакта
+        $leadContactId = null;
+        if($leadContacts = $lead->getContacts()) {
+            foreach($leadContacts as $leadContact) {
+                if($leadContact->getIsMain()) {
+                    $leadContactId = $leadContact->id;
+                }
+            }
+        }
+        else {
+            $this->addError('setContact Сделка из АМО не получена');
+        }
+
+        if($leadContactId) {
+            $this->setLog('leadContactId', $leadContactId, '--contact.txt');
+
+            // получаем контакт по его ID
+            if($contact = $this->amo->getContact($leadContactId)) {
+
+                $this->_contact['id'] = $contact->id;
+                $this->setLog('contact', $contact, '--contact.txt');
+                if($customFieldValues = $contact->getCustomFieldsValues()) {
+                    foreach($customFieldValues as $customFieldValue) {
+                        $fieldId = $customFieldValue->fieldId;
+                        if($contactAttribute = $this->getContactFieldAttribute($fieldId)) {
+                            if($values = $customFieldValue->values) {
+                                foreach($values as $value) {
+                                    $this->_contact[$contactAttribute] = $value->value;
+                                }
+                            }
+                            else {
+                                //$this->setLog('значения атрибута ' . $contactAttribute . ' контакта ' . $contact->id . ' по fieldId=' . $fieldId . ' не получены');
+                            }
+                        }
+                        else {
+                            //$this->setLog('атрибут контакта ' . $contact->id . ' по fieldId=' . $fieldId . ' не получен');
+                        }
+                    }
+                }
+                else {
+                    $this->addError('setContact customFieldValues контакта ' . $contact->id . ' не получены');
+                }
+
+
+                // приводим полученные контакты _contacts в нужный формат
+                $this->prepareContactAttributes($contact);
+                //$this->setLog('contact', $this->_contact, '--_contact.txt');
+            }
+            else {
+                $this->addError('setContact Контакт из АМО не получен по ID ' . $leadContactId);
+            }
+        }
+        else {
+            $this->addError('setContact ID главного контакта из АМО не получен');
+        }
+
+        //return $this->_contact['id'];
+    }
+
+    /**
+     * приводит _contact в нужный формат
+     *
+     * @param $contact
+     */
+    public function prepareContactAttributes($contact)
+    {
+        $this->_contact_full = $this->_contact;
+
+        if(isset($this->_contact['fio'])) {
+            $this->_contact['contact_name'] = $this->_contact['fio'];
+            unset($this->_contact['fio']);
+        }
+        else {
+            $this->_contact['contact_name'] = '';
+            if(isset($this->_contact['surname'])) {
+                $this->_contact['contact_name'] .= $this->_contact['surname'] . ' ';
+                unset($this->_contact['surname']);
+            }
+            if(isset($this->_contact['name'])) {
+                $this->_contact['contact_name'] .= $this->_contact['name'] . ' ';
+                unset($this->_contact['name']);
+            }
+            if(isset($this->_contact['fathername'])) {
+                $this->_contact['contact_name'] .= $this->_contact['fathername'];
+                unset($this->_contact['fathername']);
+            }
+        }
+
+        if(isset($this->_contact['email'])) {
+            $this->_contact['contact_email'] = $this->_contact['email'];
+            unset($this->_contact['email']);
+        }
+        if(isset($this->_contact['phone'])) {
+            $this->_contact['contact_phone'] = $this->_contact['phone'];
+            unset($this->_contact['phone']);
+        }
+        if(isset($this->_contact['birthday'])) {
+            $this->_contact['contact_birthday'] = $this->_contact['birthday'];
+            unset($this->_contact['birthday']);
+        }
+        if(isset($this->_contact['gender'])) {
+            $this->_contact['contact_gender'] = $this->_contact['gender'];
+            unset($this->_contact['gender']);
+        }
+
+        // если в контакте нет значений имени, возвращаем название контакта
+        if(!$this->_contact['contact_name']) $this->_contact['contact_name'] = $contact->getName();
+
+    }
+
+    /**
+     * получает название поля по его ID АМО
+     *
+     * @param $contactFieldId
+     * @return bool|int|string
+     */
+    public function getContactFieldAttribute($contactFieldId)
+    {
+        if(!$contactFieldId) return false;
+
+        foreach($this->fieldIds['contacts'] as $fieldName => $fieldIds) {
+            if(in_array($contactFieldId, $fieldIds)) return $fieldName;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getClientGender()
+    {
+        $leadValues = $this->_lead_values;
+
+        if($gender = $this->getContactAttribute('contact_gender')) return $gender;
+        return $this->getLeadCustomFieldValue($leadValues, 'gender');
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getDoctorName()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'doctor');
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getDoctorId()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'doctor', 'enum');
+    }
+
+    /**
+     * @return bool|mixed
+     */
+    public function getMisId()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'mis_id');
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getPipelineStatus()
+    {
+        $leadValues = $this->_lead_values;
+
+        if(isset($leadValues['status_id'])) {
+            if(isset($this->params['edit_statuses'][$leadValues['status_id']])) {
+                return $this->params['edit_statuses'][$leadValues['status_id']];
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getClinicId()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'clinic', 'enum');
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getClinicName()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'clinic');
+    }
+
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed|string
+     */
+    public function getDateTime()
+    {
+        $leadValues = $this->_lead_values;
+
+        if($datetime = $this->getLeadCustomFieldValue($leadValues, 'consultation_datetime')) {
+            return $datetime;
+        }
+        $date = $this->getLeadCustomFieldValue($leadValues, 'consultation_date');
+        $time = $this->getLeadCustomFieldValue($leadValues, 'consultation_time');
+        return $date . ' ' . $time;
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getConsultationType()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'consultation_type');
+    }
+
+    /**
+     * @param $leadValues
+     * @return bool|mixed
+     */
+    public function getConsultationTypeId()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'consultation_type', 'enum');
+    }
+
+    /**
+     * @param $attributeName
+     * @return mixed
+     */
+    public function getContactAttribute($attributeName)
+    {
+        // здесь получаем атрибут по его имени
+        if($this->_contact) {
+            if(isset($this->_contact[$attributeName])) return $this->_contact[$attributeName];
+        }
+    }
+
+    /**
+     * @param $data
+     * @param null $fieldName
+     * @param string $attributeName
+     * @return bool|mixed
+     */
+    public function getLeadCustomFieldValue($data, $fieldName = null, $attributeName = 'value')
+    {
+        if(!$data or !$fieldName or !array_key_exists($fieldName, $this->fieldIds['leads'])) return false;
+
+        foreach($data['custom_fields'] as $customField) {
+
+            if(in_array($customField['id'], $this->fieldIds['leads'][$fieldName]) and isset($customField['values'])) {
+                if(isset($customField['values'][0]) and isset($customField['values'][0][$attributeName])) return $customField['values'][0][$attributeName];
+                if(isset($customField['values'][$attributeName])) return $customField['values'][$attributeName];
+                if(isset($customField['values'][0]) and !is_array($customField['values'][0])) return $customField['values'][0];
+            }
+        }
+
+        return false;
+    }
+
+
+
+
+
+    public function actionCreateMisAppointment()
+    {
+        $this->addMessage('----------------------------------------------------------');
+        $this->addMessage('create-appointment-hook');
+
+        if(isset($this->requestBody['data']) and is_array($this->requestBody['data']) and !empty($this->requestBody['data'])) {
+            $this->_appointment = $this->requestBody['data'];
+            $this->addMessage('CMS - Установлено свойство _appointment');
+        }
+
+        $this->setAppActionRelation();
+
+        // проверяем установлен ли визит и не прокидывался он ранее в АМО
+        $this->checkCreatedAppointment();
+
+        if($this->hasErrors()) return $this->getResult();
+
+        // собираем поля для АМО и прокидываем лид
+        $this->createAmoLead();
+
+        return $this->getResult();
+
+    }
+
+    public function createAmoLead()
+    {
+        $params = [
+            'name' => 'Новая сделка из МИС',
+            'status_id' => $this->params['status_id'],
+            'pipeline_id' => $this->params['pipeline_id'],
+            'custom_fields_values' => [
+
+                // clinic
+                [
+                    'field_id' => 457485,
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                    'values' => [
+                        [
+                            'value' => $this->params['clinic'],
+                            'enum' => $this->params['clinic_id'],
+                        ]
+                    ]
+                ],
+
+                // mis status
+                [
+                    'field_id' => $this->params['mis_status_name'],
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_SELECT,
+                    'values' => [
+                        [
+                            'value' => $this->_mis_statuses[1],
+                        ]
+                    ]
+                ],
+
+                // mis_id
+                [
+                    'field_id' => $this->params['mis_field_id'],
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                    'values' => [
+                        [
+                            'value' => $this->_appointment['id'],
+                        ]
+                    ]
+                ],
+
+                // client
+            ],
+        ];
+
+
+        // doctor
+        if($this->_appointment['doctor_id'] and $this->_appointment['doctor'] and ($doctorAmoId = $this->getAmoDoctorId())) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 512391,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['doctor'],
+                        'enum' => $doctorAmoId,
+                    ]
+                ]
+            ];
+        }
+
+        // услугу прокидываем в комментарий к сделке
+        if(isset($this->_appointment['services']) and isset($this->_appointment['services'][0])) {
+            $params['custom_fields_values'][] = [
+                //'field_id' => 172013,
+                'field_id' => 686369,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['services'][0]['title'],
+                    ]
+                ]
+            ];
+        }
+
+        // consultation_datetime
+        if(isset($this->_appointment['time_start'])) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 681425,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => strtotime($this->_appointment['time_start']) - 3 * 3600,
+                    ]
+                ]
+            ];
+        }
+
+        // получаем контакт ID по номеру телефона
+        if($contactId = $this->getAmoContactId()) {
+            $params['_embedded'] = [
+                'contacts' => [
+                    [
+                        'id' => $contactId,
+                    ]
+                ],
+            ];
+        }
+
+        $result = $this->amo->addLead($params);
+
+        if($result and ($leadId = $result->getId())) {
+            $this->addMessage('leadId - '.$leadId);
+            $this->addMessage('appointmentId - '.$this->_appointment['id']);
+            $this->setAppointmentRelationValues([$leadId => $this->_appointment['id']]);
+        }
+
+        return $this->getResult();
+    }
+
+    /**
+     * возвращает contactId существующего контакта по номеру телефона
+     * либо рекурсивно создает новый контакт и возвращает его ID
+     *
+     * @return bool
+     */
+    private function getAmoContactId()
+    {
+        if($this->_create_amo_contacts > 3) return false;
+
+        $this->addMessage('Поиск контакта в AMO по номеру телефона');
+        if(!isset($this->_appointment['patient_phone'])) return false;
+        $this->addMessage($this->_appointment['patient_phone']);
+
+        if($contactId = $this->amo->getContactIdByPhone($this->_appointment['patient_phone'])) {
+            $this->addMessage('найден contactId - '.$contactId);
+            return $contactId;
+        }
+        $this->createAmoContact();
+        return $this->getAmoContactId();
+    }
+
+    public function createAmoContact()
+    {
+        $this->addMessage('Создание контакта в АМО');
+        $params = [];
+
+        if($this->_appointment['patient_name']) {
+            $params['name'] = $this->_appointment['patient_name'];
+            $params['custom_fields_values'][] = [
+                'field_id' => 172333,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['patient_name'],
+                    ]
+                ]
+            ];
+        }
+        if($this->_appointment['patient_gender']) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 493129,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['patient_gender'],
+                    ]
+                ]
+            ];
+        }
+        if($this->_appointment['patient_birth_date']) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 327131,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => strtotime($this->_appointment['patient_birth_date']),
+                    ]
+                ]
+            ];
+        }
+        if($this->_appointment['patient_phone']) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 19193,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['patient_phone'],
+                    ]
+                ]
+            ];
+        }
+        if($this->_appointment['patient_email']) {
+            $params['custom_fields_values'][] = [
+                'field_id' => 19195,
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['patient_email'],
+                    ]
+                ]
+            ];
+        }
+
+        $result = $this->amo->addContact($params);
+
+        $this->addMessage('Создается контакт');
+
+        $this->_create_amo_contacts++;
+
+        return false;
+    }
+
+    /**
+     * @param null $misId
+     * @return bool
+     */
+    public function getAmoDoctorId()
+    {
+        if(!isset($this->_appointment['doctor_id'])) return false;
+
+        foreach($this->params['doctors'] as $doctor) {
+            if($doctor['mis_id'] == $this->_appointment['doctor_id']) {
+                return $doctor['amo_id'];
+            }
+        }
+
+        return false;
+    }
+
+    public function actionUpdateMisAppointment()
+    {
+        $this->addMessage('----------------------------------------------------------');
+        $this->addMessage('update-appointment-hook');
+
+        if(isset($this->requestBody['data']) and isset($this->requestBody['data'][0]) and !empty($this->requestBody['data'][0])) {
+            $this->_appointment = $this->requestBody['data'][0];
+            $this->addMessage('UMS - Установлено свойство _appointment');
+            //$this->addMessage($this->_appointment);
+        }
+
+        $this->setAppActionRelation();
+
+        // проверяем установлен ли визит и прокидывался ли он ранее в АМО
+        $this->checkUpdateAppointment();
+
+        if($this->hasErrors()) return $this->getResult();
+
+        // собираем поля для АМО и прокидываем лид
+        $this->updateAmoLead();
+
+        return $this->getResult();
+
+
+
+
+
+
+
+
+
+        //$this->addMessage($this->requestBody);
+
+        /*
+         * будут контролироваться только поле услуг и статус в МИС, в котором оказывается визит
+         * сначала проверяем есть ли этот визит в АМО через _app_created
+         * нужно проконтролировать обратный веб-хук, который прилетит после редактирования.
+         * для этого перед запуливанием изменений в АМО нужно куда-то сохранить mis_id
+         * сделать свойство _mis_app и в него складывать СОЗДАННЫЕ в МИСе визиты и не принимать
+         * веб-хуки от них из АМО
+         * тогда сохранять и при обратном веб-хуке из АМО чистить mis_id и возвращать getResult
+         *
+         * еще непонятный кейс - создаем визит в МИС, он появляется в АМО. После того как его редактируем в АМО ничего не происходит
+         *
+         *
+         * */
+        $fields = [
+            'patient_name',
+            'patient_birth_date',
+            'patient_gender',
+            'patient_phone',
+            'patient_email',
+        ];
+        // услуги можно только добавить
+        // здесь нужно искать лид в АМО, в котором amo_id будет равен appointment_id
+        // далее прокидывать все поля
+    }
+
+    public function updateAmoLead()
+    {
+        if(!array_key_exists($this->_appointment['status_id'], $this->_mis_statuses)) {
+            $this->addError('Неизвестный статус сделки - ' . $this->_appointment['status_id'], true);
+            return $this->getResult();
+        }
+
+        $lead = $this->amo->getLeadByMisId($this->params['pipeline_id'], $this->_appointment['id'], $this->params['mis_field_id']);
+
+        if(!$lead) {
+            $this->addError('Сделка с mis_id '.$this->_appointment['id'].' в воронке '.$this->params['pipeline_id'].' не найдена', true);
+        }
+
+        if($this->hasErrors()) return $this->getResult();
+
+        $this->addMessage('id найденного лида '.$lead->getId());
+        $this->addMessage($lead->getId());
+
+        $params = [
+            'id' => $lead->getId(),
+            'custom_fields_values' => [
+                [
+                    'field_id' => $this->params['mis_status_name'],
+                    'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_SELECT,
+                    'values' => [
+                        [
+                            'value' => $this->_mis_statuses[$this->_appointment['status_id']],
+                        ]
+                    ]
+                ],
+            ],
+        ];
+
+        $this->addMessage('Параметры обновления сделки');
+        $this->addMessage($params);
+
+        $result = $this->amo->updateLead($params);
+
+        if($result and ($leadId = $result->getId())) {
+            $this->addMessage('обновлена сделка leadId - '.$leadId);
+            $this->addMessage('визит обновленной сделки appointmentId - '.$this->_appointment['id']);
+        }
+
+        return $this->getResult();
+    }
+
+    public function checkCreatedAppointment()
+    {
+        if(!$this->_appointment) {
+            $this->addError('Визит из веб-хука не найден', true);
+            return $this->getResult();
+        }
+
+        if(in_array($this->_appointment['id'], $this->_app_created)) {
+            $this->addError('ID визита '.$this->_appointment['id'].' уже существует в АМО', true);
+            return $this->getResult();
+        }
+        $this->addMessage('проверка на существование mis_id в АМО отработал errors - ' . $this->hasErrors());
+    }
+
+    public function checkUpdateAppointment()
+    {
+        if(!$this->_appointment) {
+            $this->addError('Визит из веб-хука не найден', true);
+            return $this->getResult();
+        }
+
+        if(!in_array($this->_appointment['id'], $this->_app_created)) {
+            $this->addError('ID визита '.$this->_appointment['id'].' не существует в АМО', true);
+            return $this->getResult();
+        }
+        $this->addMessage('проверка на существование mis_id в АМО отработал errors - ' . $this->hasErrors());
+    }
+
+
+}

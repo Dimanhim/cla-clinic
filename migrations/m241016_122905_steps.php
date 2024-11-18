@@ -19,6 +19,8 @@ class m241016_122905_steps extends Migration
             'name'                  => Schema::TYPE_STRING . ' NOT NULL',
             'pipeline_id'           => Schema::TYPE_INTEGER . ' NOT NULL',
             'amo_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
+            'amo_status'            => Schema::TYPE_SMALLINT,
+            'mis_status'            => Schema::TYPE_SMALLINT,
 
             'is_active'             => Schema::TYPE_SMALLINT . ' DEFAULT 1',
             'deleted'               => Schema::TYPE_SMALLINT,

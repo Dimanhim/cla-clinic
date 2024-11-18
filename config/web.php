@@ -45,6 +45,13 @@ $config = [
                 ],
             ],
         ],
+        'webhookConfig' => [
+            'class' => 'app\components\WebhookConfig',
+            'mis_field_id' => 702329,
+            'amo_status_field_id' => 702953,
+            'datetime_field_id' => 704837,
+            'duration_field_id' => 704839,
+        ],
         'infoLog' => [
             'class' => 'app\components\InfoLog',
         ],
@@ -65,7 +72,7 @@ if (YII_ENV_DEV) {
     $config['modules']['debug'] = [
         'class' => 'yii\debug\Module',
         // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
+        'allowedIPs' => ['*'],
     ];
 
     $config['bootstrap'][] = 'gii';

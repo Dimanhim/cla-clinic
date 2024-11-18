@@ -30,7 +30,10 @@
         "kartik-v/yii2-widget-select2": "^2.2",
         "vova07/yii2-select2-widget": "^0.1.2",
         "kartik-v/yii2-field-range": "*",
-        "hail812/yii2-adminlte3": "^1.1"
+        "hail812/yii2-adminlte3": "^1.1",
+        "amocrm/oauth2-amocrm": "^2.0",
+        "amocrm/amocrm-api-library": "^0.4.6",
+        "vlucas/phpdotenv": "dev-master"
     },
     "require-dev": {
         "yiisoft/yii2-debug": "~2.1.0",

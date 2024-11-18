@@ -217,9 +217,10 @@ class BaseModel extends ActiveRecord
     /**
      * @return array
      */
-    public static function getList()
+    public static function getList($search = false)
     {
-        return ArrayHelper::map(self::findModels()->andWhere(['not', ['name' => null]])->asArray()->all(), 'id', 'name');
+        $models = $search ? self::findSearch() : self::findModels();
+        return ArrayHelper::map($models->andWhere(['not', ['name' => null]])->asArray()->all(), 'id', 'name');
     }
 
     /**
