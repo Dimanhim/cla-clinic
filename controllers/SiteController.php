@@ -83,7 +83,7 @@ class SiteController extends Controller
     public function actionInfo()
     {
         //return true;
-        $client = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
+        $client = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE'], true);
         $client->setAccessToken();
     }
 

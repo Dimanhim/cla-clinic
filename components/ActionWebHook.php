@@ -3,6 +3,8 @@
 namespace app\components;
 
 use AmoCRM\Helpers\CustomFieldHelper;
+use app\models\Clinic;
+use app\components\ApiComponent;
 
 trait ActionWebHook
 {
@@ -224,6 +226,8 @@ trait ActionWebHook
                     'client_email' => $this->getContactAttribute('contact_email'),
                     'client_birthday' => $this->getContactAttribute('contact_birthday'),
                     'client_gender' => $this->getClientGender(),
+                    'custom_datetime' => $this->getCustomDatetime(),
+                    'custom_duration' => $this->getCustomDuration(),
                     'mis_id' => $this->getMisId(),
                 ];
 
@@ -249,15 +253,17 @@ trait ActionWebHook
         ) {
             $this->_lead_values = $this->requestBody['leads']['status'][0];
 
+            $this->setLog('hook', $this->_lead_values, '--hook.txt');
+
             // проверяем, обрабатывать ли эту сделку
             $this->checkFilterLead();
 
             if(!$this->hasErrors()) {
 
+                $this->addMessage('amo');
+
                 $this->addMessage('----------------------------------------------------------');
                 $this->addMessage($this->method);
-                $this->addMessage('_lead_values');
-                $this->addMessage($this->_lead_values);
 
                 $this->setAppActionRelation();
 
@@ -286,6 +292,8 @@ trait ActionWebHook
                     'client_email' => $this->getContactAttribute('contact_email'),
                     'client_birthday' => $this->getContactAttribute('contact_birthday'),
                     'client_gender' => $this->getClientGender(),
+                    'custom_datetime' => $this->getCustomDatetime(),
+                    'custom_duration' => $this->getCustomDuration(),
                     'mis_id' => $this->getMisId(),
                 ];
 
@@ -296,10 +304,14 @@ trait ActionWebHook
 
                 $this->addMessage('Обновляется сделка '.$this->_lead_values['id']);
 
-                if($this->_lead_values['status_id'] == $this->params['update_status'] and !$this->_lead['mis_id']) {
+                if($this->isStatusForChange($this->_lead_values['status_id'])) {
                     $this->addMessage('Создается визит в МИС');
                     $this->createMisAppointment('update-status');
                 }
+                /*if($this->_lead_values['status_id'] == $this->params['update_status'] and !$this->_lead['mis_id']) {
+                    $this->addMessage('Создается визит в МИС');
+                    $this->createMisAppointment('update-status');
+                }*/
             }
         }
         return $this->getResult();
@@ -372,7 +384,7 @@ trait ActionWebHook
                 }
                     continue 2;
                 case 'time_start' : {
-                    $amoParam = date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600) ;
+                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600) ;
                     $this->addMessage('appointment time_start - '. $this->_appointment['time_start']);
                     $this->addMessage('amo param time_start - '. $amoParam);
                     if(strtotime($amoParam) != strtotime($this->_appointment['time_start'])) {
@@ -382,7 +394,7 @@ trait ActionWebHook
                 }
                     continue 2;
                 case 'time_end' : {
-                    $amoParam = date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600 + $this->params['time'] * 60);
+                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600 + $this->getDurationTime() * 60);
                     if($amoParam != $this->_appointment['time_end']) {
                         return 'time_end';
                     }
@@ -451,15 +463,15 @@ trait ActionWebHook
                 // проверяем клинику
                 $amoClinicId = $this->getClinicId($lead);
 
-                if($this->params and isset($this->params['clinic_id'])) {
+                /*if($this->params and isset($this->params['clinic_id'])) {
                     if($this->params['clinic_id'] != $amoClinicId) {
                         $this->addError('Данная клиника не обрабатывается '.$amoClinicId);
                         return false;
                     }
                     return true;
-                }
-                $this->addError('Воронка не задана в конфиге');
-                return false;
+                }*/
+
+                return $this->validateClinicSetApi($amoClinicId);
             }
 
             $this->addError('Данная воронка не обрабатывается '.$lead['pipeline_id']);
@@ -467,6 +479,26 @@ trait ActionWebHook
         }
 
         $this->addError('Воронка не задана в ответе сделки', true);
+        return false;
+    }
+
+    public function validateClinicSetApi($amoClinicId)
+    {
+        $this->addMessage('validateClinic amo_clinic_id - '.$amoClinicId);
+        if($clinics = $this->params['clinics']) {
+            foreach($clinics as $clinic) {
+                if($clinic['amo_id'] == $amoClinicId) {
+                    $this->addMessage('findCondition clinic '.$clinic['id']);
+                    if($clinicModel = Clinic::findSearch()->where(['id' => $clinic['id']])->one()) {
+                        $this->addMessage('find clinic '.$clinicModel->id);
+                        $this->addMessage('api_key - '. $clinicModel->api_key);
+                        $this->api = new ApiComponent($this->isTest, $clinicModel->api_key);
+                        return true;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -551,10 +583,20 @@ trait ActionWebHook
     }
 
     /**
+     * @return mixed
+     */
+    public function getDurationTime()
+    {
+        return $this->getLeadCustomFieldValue($this->_lead_values, 'custom_duration') ?: $this->params['time'];
+    }
+
+    /**
      * @return array
      */
     public function getParamsForCreateMisAppointment()
     {
+        file_put_contents('info-log.txt', date('d.m.Y H:i:s').' duration time - '.print_r($this->getDurationTime(), true)."\n", FILE_APPEND);
+        file_put_contents('info-log.txt', date('d.m.Y H:i:s').' _lead_values - '.print_r($this->_lead_values, true)."\n", FILE_APPEND);
         $params = [
             //'first_name' => $this->_lead['client_name'],
             'birth_date' => date('d.m.Y', $this->_lead['client_birthday'] + 6 * 3600),
@@ -562,8 +604,8 @@ trait ActionWebHook
             'gender' => $this->_lead['client_gender'] ? ($this->_lead['client_gender'] == 'М' ? 1 : 2) : null,
             'email' => $this->_lead['client_email'],
             'doctor_id' => $this->getMisDoctorId(),
-            'time_start' => date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600),
-            'time_end' => date('d.m.Y H:i', $this->_lead['consultation_datetime'] + 3 * 3600 + $this->params['time'] * 60),
+            'time_start' => date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600),
+            'time_end' => date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600 + $this->getDurationTime() * 60),
             'clinic_id' => $this->getMisClinicId(),
             'is_handled' => true,
         ];
@@ -819,10 +861,32 @@ trait ActionWebHook
      */
     public function getMisClinicId()
     {
+        if($this->_lead && isset($this->_lead['clinic_id']) && $this->params['clinics']) {
+            foreach($this->params['clinics'] as $clinic) {
+                if($this->_lead['clinic_id'] == $clinic['amo_id']) {
+                    return $clinic['mis_id'];
+                }
+            }
+        }
+        return null;
+
+        // _lead[clinic_id]
         if($this->params and isset($this->params['clinic_mis_id'])) {
             return $this->params['clinic_mis_id'];
         }
         return null;
+    }
+
+    public function isStatusForChange($amoStatusId)
+    {
+        if($this->_lead && isset($this->_lead['clinic_id']) && $this->params['clinics']) {
+            foreach($this->params['clinics'] as $clinic) {
+                if($amoStatusId == $clinic['update_status']) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -836,9 +900,12 @@ trait ActionWebHook
         }
 
         $leadId = $this->_lead_values['id'];
-
+        $this->addMessage('$leadId - '.$leadId);
         // получаем сделку
         $lead = $this->amo->getLead($leadId);
+
+        $this->addMessage('amo lead');
+        //$this->addMessage($lead);
 
         // получаем ID ее главного контакта
         $leadContactId = null;
@@ -1012,6 +1079,26 @@ trait ActionWebHook
     }
 
     /**
+     * @return bool|mixed
+     */
+    public function getCustomDatetime()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'custom_datetime');
+    }
+
+    /**
+     * @return bool|mixed
+     */
+    public function getCustomDuration()
+    {
+        $leadValues = $this->_lead_values;
+
+        return $this->getLeadCustomFieldValue($leadValues, 'custom_duration');
+    }
+
+    /**
      * @param $leadValues
      * @return bool|mixed
      */
@@ -1059,7 +1146,7 @@ trait ActionWebHook
     {
         $leadValues = $this->_lead_values;
 
-        if($datetime = $this->getLeadCustomFieldValue($leadValues, 'consultation_datetime')) {
+        if($datetime = $this->getLeadCustomFieldValue($leadValues, 'custom_datetime')) {
             return $datetime;
         }
         $date = $this->getLeadCustomFieldValue($leadValues, 'consultation_date');
@@ -1227,9 +1314,11 @@ trait ActionWebHook
         }
 
         // consultation_datetime
+        // custom_datetime
         if(isset($this->_appointment['time_start'])) {
             $params['custom_fields_values'][] = [
-                'field_id' => 681425,
+                //'field_id' => 681425,
+                'field_id' => 704837,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                 'values' => [
                     [

@@ -58,7 +58,13 @@ class AmoCrmWorkspace extends AmoCrmClient
 
     public function getLead($id)
     {
-        $data = $this->apiClient->leads()->getOne($id, ['contacts']);
+        try {
+            return $this->apiClient->leads()->getOne($id, ['contacts']);
+        }
+        catch (\Exception $e) {
+            file_put_contents('amo-errors-log.txt', date('d.m.Y H:i:s').'getLead ID - '.$id.' '.print_r($e, true)."\n", FILE_APPEND);
+            return false;
+        }
 
         return $data;
     }
@@ -214,8 +220,13 @@ class AmoCrmWorkspace extends AmoCrmClient
 
     public function getLeadsList()
     {
-        $data = $this->apiClient->leads()->get();
-        return $data;
+        try {
+            return $this->apiClient->leads()->get();
+        }
+        catch (\Exception $e) {
+            file_put_contents('amo-errors-log.txt', date('d.m.Y H:i:s').'e - '.print_r($e, true)."\n", FILE_APPEND);
+            return false;
+        }
     }
 
     public function getCustomFields()

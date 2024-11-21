@@ -42,13 +42,13 @@ use app\models\Step;
                 </div>
                 <div class="card-body">
 
-                    <?= $form->field($model, '_steps_create')->widget(Select2::className(), [
+                    <?/*= $form->field($model, '_steps_create')->widget(Select2::className(), [
                         'data' => Step::getListWithPipeline(),
                         'options' => [
                             'prompt' => '[Не выбраны]',
                             'multiple' => true,
                         ],
-                    ]) ?>
+                    ])*/ ?>
 
                     <?= $form->field($model, '_steps_update')->widget(Select2::className(), [
                         'data' => Step::getListWithPipeline(),

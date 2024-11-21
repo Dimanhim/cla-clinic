@@ -20,9 +20,9 @@ class ApiComponent
     /**
      *
      */
-    public function __construct($test = false)
+    public function __construct($test = false, $apiKey)
     {
-        $apiKey = $test ? $_ENV['MIS_API_KEY_TEST'] : $_ENV['MIS_API_KEY'];
+        //$apiKey = $test ? $_ENV['MIS_API_KEY_TEST'] : $_ENV['MIS_API_KEY'];
         $this->api = new RnovaApi($_ENV['MIS_REQUEST_API_URL'], $apiKey);
     }
 

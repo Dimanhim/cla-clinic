@@ -19,6 +19,8 @@ class BaseWebhook
             'consultation_datetime' => [681425],
             'phone' => [19193],
             'mis_id' => [702329],
+            'custom_datetime' => [704837],
+            'custom_duration' => [704839],
         ],
         'contacts' => [
             'fio' => [172333],
@@ -116,9 +118,6 @@ class BaseWebhook
         //$this->requestBody = \Yii::$app->request->getRawBody();
         $this->requestBody = \Yii::$app->request->bodyParams;
 
-        $this->amo = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
-        $this->api = new ApiComponent($this->isTest);
-
         $this->setParams();
 
         $this->validateWebHook();
@@ -127,7 +126,9 @@ class BaseWebhook
             return false;
         }
 
-        $this->setLog('hook', $this->requestBody, '--hook.txt');
+        $this->amo = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
+
+        //$this->api = new ApiComponent($this->isTest);
 
         //return false;
         return $this->getPostAction();
@@ -169,6 +170,7 @@ class BaseWebhook
 
     public function getPostAction()
     {
+        $this->setLog('hook', $this->method, '--hook.txt');
         switch ($this->method) {
             //case 'create-appointment' : return $this->actionCreateAppointment();
             //    break;

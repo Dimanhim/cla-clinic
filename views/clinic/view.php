@@ -34,7 +34,7 @@ $this->params['breadcrumbs'][] = $this->title;
             'amo_id',
             'mis_id',
             'reception_time',
-            [
+            /*[
                 'attribute' => '_steps_create',
                 'format' => 'raw',
                 'value' => function($data) {
@@ -51,7 +51,7 @@ $this->params['breadcrumbs'][] = $this->title;
                         return $str;
                     }
                 }
-            ],
+            ],*/
             [
                 'attribute' => '_steps_update',
                 'format' => 'raw',

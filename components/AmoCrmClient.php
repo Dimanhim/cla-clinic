@@ -41,7 +41,7 @@ class AmoCrmClient
      * @param null $redirectUrl
      * @param null $temporaryCode
      */
-    public function __construct($clientId = null, $clientSecret = null, $redirectUrl = null, $temporaryCode = null)
+    public function __construct($clientId = null, $clientSecret = null, $redirectUrl = null, $temporaryCode = null, $refreshAccessToken = false)
     {
         $this->clientId = $clientId;
         $this->secretKey = $clientSecret;
@@ -50,7 +50,10 @@ class AmoCrmClient
 
         if($this->apiClientContact = new AmoCRMApiClient($this->clientId, $this->secretKey, $this->redirectUrl)) {
             // закомментировать для создания файла amo_access.json
-            $this->apiClient = $this->getApiClient();
+            if(!$refreshAccessToken) {
+                $this->apiClient = $this->getApiClient();
+            }
+
         }
     }
 
