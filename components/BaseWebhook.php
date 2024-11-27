@@ -6,9 +6,13 @@ class BaseWebhook
 {
     use ActionWebHook;
 
-    public $logFileName;
+    public $_ident;
+    public $_mis_clinic;
 
-    private $fieldIds = [
+    // клиника из конфига
+    public $_clinic;
+
+    public $fieldIds = [
         'leads' => [
             'doctor' => [690989, 512391],
             'clinic' => [690991, 457485],
@@ -36,7 +40,7 @@ class BaseWebhook
         ],
     ];
 
-    private $_pipeline_statuses = [
+    public $_pipeline_statuses = [
         32970937 => 'Лид на консультацию',
         34872328 => 'Взят в работу',
         47045824 => 'Не квалифицирован',
@@ -50,7 +54,7 @@ class BaseWebhook
         47045830 => 'Визит МИС',
     ];
 
-    private $_mis_statuses = [
+    public $_mis_statuses = [
         1 => 'Записан',
         2 => 'Ожидает',
         3 => 'На приеме',
@@ -64,25 +68,25 @@ class BaseWebhook
         'data' => [],
     ];
 
-    private $_allowed_methods = [
+    public $_allowed_methods = [
         //'create-appointment',
         'update-appointment',
         'update-status-lead',
-        //'create-mis-appointment',
-        //'update-mis-appointment',
+        'create-mis-appointment',
+        'update-mis-appointment',
     ];
 
-    private $_response;
-    private $webhookKey;
-    private $params;
-    private $api;
-    private $amo;
-    private $requestBody;
-    private $method;
-    private $isTest = false;
-    private $_log_prefix = '';
-    private $_create_amo_contacts = 0;
-    private $_contact = [
+    public $_response;
+    public $webhookKey;
+    public $params;
+    public $api;
+    public $amo;
+    public $requestBody;
+    public $method;
+    public $isTest = false;
+    public $_log_prefix = '';
+    public $_create_amo_contacts = 0;
+    public $_contact = [
         'id' => null,
         'contact_name' => null,
         'contact_phone' => null,
@@ -90,28 +94,30 @@ class BaseWebhook
         'contact_gender' => null,
         'contact_birthday' => null,
     ];
-    private $_contact_full = [];
+    public $_contact_full = [];
 
-    private $_app_created_filename = 'app_created.json';
-    private $_app_updated_filename = 'app_updated.json';
-    private $_update_hook_filename = 'hook_update.json';
-    private $_app_created = [];
-    private $_app_updated = [];
-    private $_update_hook = [];
-    private $_canceled_appointment_id = null;
+    public $_app_created_filename = 'app_created.json';
+    public $_app_updated_filename = 'app_updated.json';
+    public $_update_hook_filename = 'hook_update.json';
+    public $_app_created = [];
+    public $_app_updated = [];
+    public $_update_hook = [];
+    public $_canceled_appointment_id = null;
 
 
     // чистый лид из веб-хука
-    private $_lead_values = [];
+    public $_lead_values = [];
 
     // обработанный лид из АМО веб-хука
     // для логов
-    private $_lead = [];
+    public $_lead = [];
 
-    private $_appointment = [];
+    public $_appointment = [];
 
     public function __construct($method, $webhookKey = null, $test = 0)
     {
+        $this->_ident = mt_rand(1000,10000);
+
         $this->isTest = $test;
         $this->method = $method;
         $this->webhookKey = $webhookKey;
@@ -170,7 +176,7 @@ class BaseWebhook
 
     public function getPostAction()
     {
-        $this->setLog('hook', $this->method, '--hook.txt');
+        //$this->setLog('hook', $this->method, '--hook.txt');
         switch ($this->method) {
             //case 'create-appointment' : return $this->actionCreateAppointment();
             //    break;
@@ -178,10 +184,10 @@ class BaseWebhook
                 break;
             case 'update-status-lead' : return $this->actionUpdateStatusLead();
                 break;
-            //case 'create-mis-appointment' : return $this->actionCreateMisAppointment();
-            //    break;
-            //case 'update-mis-appointment' : return $this->actionUpdateMisAppointment();
-            //    break;
+            case 'create-mis-appointment' : return $this->actionCreateMisAppointment();
+                break;
+            case 'update-mis-appointment' : return $this->actionUpdateMisAppointment();
+                break;
         }
         return false;
     }
@@ -276,6 +282,7 @@ class BaseWebhook
      * @param string $fileName
      */
     private function setLog($name = '', $subject = [], $fileName = 'info-log') {
-        file_put_contents($this->_log_prefix.$fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".print_r($subject, true)."\n", FILE_APPEND);
+        //if($this->method != 'create-mis-appointment') return false;
+        file_put_contents($fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".$this->_ident." - ".print_r($subject, true)."\n", FILE_APPEND);
     }
 }

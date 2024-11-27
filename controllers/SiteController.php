@@ -53,7 +53,7 @@ class SiteController extends Controller
      *
      * @return string
      */
-    public function actionIndex()
+    public function actionIndex($config = false)
     {
         /*if (Yii::$app->user->isGuest) {
             return $this->redirect(['login']);
@@ -65,12 +65,14 @@ class SiteController extends Controller
         echo "</pre>";
         exit;*/
 
-        /*$config = Yii::$app->webhookConfig->getConfig();
+        if($config) {
+            $config = Yii::$app->webhookConfig->getConfig();
 
-        echo "<pre>";
-        print_r($config);
-        echo "</pre>";
-        exit;*/
+            echo "<pre>";
+            print_r($config);
+            echo "</pre>";
+            exit;
+        }
         return $this->render('index');
     }
 

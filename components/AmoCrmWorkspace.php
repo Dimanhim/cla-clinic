@@ -274,9 +274,11 @@ class AmoCrmWorkspace extends AmoCrmClient
 
     public function addLead($params = [])
     {
+        file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' addLead params count - '.print_r(count($params), true)."\n", FILE_APPEND);
         if(!$params) return false;
 
         $lead = LeadModel::addFromArray($params);
+        file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' lead - '.print_r($lead, true)."\n", FILE_APPEND);
         try {
             $leadModel = $this->apiClient->leads()->addOne($lead);
             file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' - '.print_r('АМО Сделка добавлена', true)."\n", FILE_APPEND);

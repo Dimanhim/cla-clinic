@@ -3,8 +3,8 @@
 namespace app\components;
 
 use AmoCRM\Helpers\CustomFieldHelper;
-use app\models\Clinic;
 use app\components\ApiComponent;
+use app\models\Clinic;
 
 trait ActionWebHook
 {
@@ -119,7 +119,7 @@ trait ActionWebHook
     public function setLeadIdToUpdateRelation($leadId)
     {
         file_put_contents($this->_app_updated_filename, json_encode(['lead_id' => $leadId]));
-        $this->addMessage('В файл _app_updated установлен lead_id '.$leadId);
+        //$this->addMessage('В файл _app_updated установлен lead_id '.$leadId);
     }
 
     /**
@@ -190,6 +190,7 @@ trait ActionWebHook
 
             //$this->checkLeadAppointment();
 
+            $this->setClinic($this->getClinicId());
 
             // проверяем, обрабатывать ли эту сделку
             $this->checkFilterLead();
@@ -198,6 +199,12 @@ trait ActionWebHook
 
                 $this->addMessage('----------------------------------------------------------');
                 $this->addMessage($this->method);
+
+                $this->addMessage('Установлена клиника _clinic');
+                $this->addMessage($this->_clinic);
+
+                //$this->addMessage('_lead_values');
+                //$this->addMessage($this->_lead_values);
 
                 $this->setAppActionRelation();
 
@@ -231,10 +238,13 @@ trait ActionWebHook
                     'mis_id' => $this->getMisId(),
                 ];
 
+                $this->addMessage('_lead');
+                $this->addMessage($this->_lead);
+
                 $this->setAppointmentByMisId();
 
                 $this->addMessage('Обновляется сделка _lead_values '.$this->_lead_values['id']);
-                $this->addMessage($this->_lead_values);
+                //$this->addMessage($this->_lead_values);
                 $this->addMessage('_lead');
                 $this->addMessage($this->_lead);
 
@@ -253,17 +263,20 @@ trait ActionWebHook
         ) {
             $this->_lead_values = $this->requestBody['leads']['status'][0];
 
-            $this->setLog('hook', $this->_lead_values, '--hook.txt');
+            //$this->setLog('hook', $this->_lead_values, '--hook.txt');
+
+            $this->setClinic($this->getClinicId());
 
             // проверяем, обрабатывать ли эту сделку
             $this->checkFilterLead();
 
             if(!$this->hasErrors()) {
 
-                $this->addMessage('amo');
-
                 $this->addMessage('----------------------------------------------------------');
                 $this->addMessage($this->method);
+
+                $this->addMessage('Установлена клиника _clinic');
+                $this->addMessage($this->_clinic);
 
                 $this->setAppActionRelation();
 
@@ -300,13 +313,22 @@ trait ActionWebHook
                 $this->addMessage('_lead');
                 $this->addMessage($this->_lead);
 
+                $this->addMessage('_lead clinic_id '.$this->_lead['clinic_id']);
+
+                $this->setClinic($this->_lead['clinic_id']);
+                $this->addMessage('Установлена клиника _clinic');
+                $this->addMessage($this->_clinic);
+
                 $this->setAppointmentByMisId();
 
                 $this->addMessage('Обновляется сделка '.$this->_lead_values['id']);
 
-                if($this->isStatusForChange($this->_lead_values['status_id'])) {
+                if($this->isStatusForChange()) {
                     $this->addMessage('Создается визит в МИС');
                     $this->createMisAppointment('update-status');
+                }
+                else {
+                    $this->addMessage('Сделка находитмя в неконтролируемом статусе '.$this->_lead_values['status_id']);
                 }
                 /*if($this->_lead_values['status_id'] == $this->params['update_status'] and !$this->_lead['mis_id']) {
                     $this->addMessage('Создается визит в МИС');
@@ -441,21 +463,26 @@ trait ActionWebHook
     public function checkFilterLead()
     {
         if(!$lead = $this->_lead_values) {
-            $this->addError('Лид в вебхуке не найден');
+            $this->addError('Лид в вебхуке не найден', true);
             return false;
         }
+
+        if(!isset($lead['status_id'])) {
+            $this->addError('В лиде не найден статус', true);
+            return false;
+        }
+
+        if($this->hasErrors()) return false;
 
         // проверяем воронку
         if(isset($lead['pipeline_id'])) {
 
             if($lead['pipeline_id'] == $this->params['pipeline_id']) {
 
-                if($this->hasErrors()) return false;
-
                 // если хук на изменение, проверяем еще и статусы (этапы) воронки
                 if($this->method == 'update-appointment') {
-                    if(!array_key_exists($lead['status_id'], $this->params['edit_statuses'])) {
-                        $this->addError('Сделка находится в неконтролируемом статусе '.$lead['status_id']);
+                    if(!array_key_exists($lead['status_id'], $this->_clinic['edit_statuses'])) {
+                        $this->addError('Сделка находится в неконтролируемом статусе '.$lead['status_id'], true);
                         return false;
                     }
                 }
@@ -482,23 +509,17 @@ trait ActionWebHook
         return false;
     }
 
-    public function validateClinicSetApi($amoClinicId)
+    /**
+     * @return bool
+     */
+    public function validateClinicSetApi()
     {
-        $this->addMessage('validateClinic amo_clinic_id - '.$amoClinicId);
-        if($clinics = $this->params['clinics']) {
-            foreach($clinics as $clinic) {
-                if($clinic['amo_id'] == $amoClinicId) {
-                    $this->addMessage('findCondition clinic '.$clinic['id']);
-                    if($clinicModel = Clinic::findSearch()->where(['id' => $clinic['id']])->one()) {
-                        $this->addMessage('find clinic '.$clinicModel->id);
-                        $this->addMessage('api_key - '. $clinicModel->api_key);
-                        $this->api = new ApiComponent($this->isTest, $clinicModel->api_key);
-                        return true;
-                    }
-                }
-            }
+        if($clinicModel = Clinic::findSearch()->where(['id' => $this->_clinic['id']])->one()) {
+            $this->api = new ApiComponent($this->isTest, $clinicModel->api_key);
+            $this->addMessage('Клиника найдена в системе с api_key='.$clinicModel->api_key.' Создан объект API');
+            return true;
         }
-
+        $this->addError('Клиника не найдена в системе', true);
         return false;
     }
 
@@ -564,6 +585,8 @@ trait ActionWebHook
         $this->addMessage('$params:');
         $this->addMessage($params);
 
+        if($this->hasErrors()) return $this->getResult();
+
         $misRequest = $this->api->createAppointment($params);
 
         if($misRequest and isset($misRequest['data']) and !is_array($misRequest['data'])) {
@@ -597,6 +620,12 @@ trait ActionWebHook
     {
         file_put_contents('info-log.txt', date('d.m.Y H:i:s').' duration time - '.print_r($this->getDurationTime(), true)."\n", FILE_APPEND);
         file_put_contents('info-log.txt', date('d.m.Y H:i:s').' _lead_values - '.print_r($this->_lead_values, true)."\n", FILE_APPEND);
+
+        if(!$this->_lead['custom_datetime'] || $this->_lead['custom_datetime'] < 3600 * 24) {
+            $this->addError('Не установлено время приемаа', true);
+            return false;
+        }
+
         $params = [
             //'first_name' => $this->_lead['client_name'],
             'birth_date' => date('d.m.Y', $this->_lead['client_birthday'] + 6 * 3600),
@@ -815,8 +844,7 @@ trait ActionWebHook
             }
         }
         if($this->_appointment) {
-            $this->addMessage('Установлен _appointment');
-            $this->addMessage($this->_appointment);
+            $this->addMessage('Установлен _appointment - '.count($this->_appointment));
         }
     }
 
@@ -877,11 +905,13 @@ trait ActionWebHook
         return null;
     }
 
-    public function isStatusForChange($amoStatusId)
+    public function isStatusForChange()
     {
-        if($this->_lead && isset($this->_lead['clinic_id']) && $this->params['clinics']) {
+        return in_array($this->_lead['pipeline_status_id'], $this->_clinic['update_status']);
+        return false;
+        if($this->_lead && isset($this->_lead['clinic_id'])) {
             foreach($this->params['clinics'] as $clinic) {
-                if($amoStatusId == $clinic['update_status']) {
+                if(in_array($amoStatusId, $clinic['update_status'])) {
                     return true;
                 }
             }
@@ -1222,6 +1252,7 @@ trait ActionWebHook
         if(isset($this->requestBody['data']) and is_array($this->requestBody['data']) and !empty($this->requestBody['data'])) {
             $this->_appointment = $this->requestBody['data'];
             $this->addMessage('CMS - Установлено свойство _appointment');
+            $this->addMessage($this->_appointment);
         }
 
         $this->setAppActionRelation();
@@ -1229,20 +1260,75 @@ trait ActionWebHook
         // проверяем установлен ли визит и не прокидывался он ранее в АМО
         $this->checkCreatedAppointment();
 
+        $this->setMisClinic();
+
         if($this->hasErrors()) return $this->getResult();
+
+        $this->setClinic(null, $this->_mis_clinic['mis_id']);
 
         // собираем поля для АМО и прокидываем лид
         $this->createAmoLead();
 
+        if($this->hasErrors()) return $this->getResult();
+
         return $this->getResult();
 
+    }
+
+    /**
+     * @return bool
+     */
+    public function setMisClinic()
+    {
+        $this->addMessage('Устанавливается клиника из МИС');
+        if(!$this->_appointment) {
+            $this->addError('Не установлен _appointment для получения клиники', true);
+            return false;
+        }
+        //$this->addMessage('_appointments установлен');
+        if($clinic = Clinic::findModels()->andWhere(['mis_id' => $this->_appointment['clinic_id']])->one()) {
+            //$this->addMessage('Найдена клиника из запроса ID='.$clinic->id);
+            $this->_mis_clinic = $clinic;
+            //$this->addMessage('Установлено свойство _mis_clinic');
+            //$this->addMessage('Ошибки:');
+            //$this->addMessage($this->result);
+            return $this->_mis_clinic;
+        }
+
+        $this->addError('Не найдена клиника из запроса', true);
+        return false;
+    }
+
+    /**
+     * @param null $amoClinicId
+     * @param null $misClinicId
+     * @return bool
+     */
+    public function setClinic($amoClinicId = null, $misClinicId = null)
+    {
+        if($amoClinicId && $misClinicId) return false;
+
+        if($this->params['clinics']) {
+            foreach($this->params['clinics'] as $clinic) {
+                if($amoClinicId && $clinic['amo_id'] == $amoClinicId) {
+                    $this->_clinic = $clinic;
+                }
+                if($misClinicId && $clinic['mis_id'] == $misClinicId) {
+                    $this->_clinic = $clinic;
+                }
+            }
+        }
+
+        else {
+            $this->addError('Клиника _clinic не установлена');
+        }
     }
 
     public function createAmoLead()
     {
         $params = [
             'name' => 'Новая сделка из МИС',
-            'status_id' => $this->params['status_id'],
+            'status_id' => $this->getConfigClinicParam('status_id'),
             'pipeline_id' => $this->params['pipeline_id'],
             'custom_fields_values' => [
 
@@ -1252,8 +1338,8 @@ trait ActionWebHook
                     'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                     'values' => [
                         [
-                            'value' => $this->params['clinic'],
-                            'enum' => $this->params['clinic_id'],
+                            'value' => $this->getConfigClinicParam('amo_name'),
+                            'enum_id' => $this->getConfigClinicParam('status_id'),
                         ]
                     ]
                 ],
@@ -1283,7 +1369,6 @@ trait ActionWebHook
                 // client
             ],
         ];
-
 
         // doctor
         if($this->_appointment['doctor_id'] and $this->_appointment['doctor'] and ($doctorAmoId = $this->getAmoDoctorId())) {
@@ -1339,7 +1424,15 @@ trait ActionWebHook
             ];
         }
 
+        $this->addMessage('Поля для создания лида в амо');
+        $this->addMessage($params);
+
+        $this->addMessage('this amo '.!!$this->amo);
+
         $result = $this->amo->addLead($params);
+
+        $this->addMessage('Результат создания лида в амо');
+        $this->addMessage($result);
 
         if($result and ($leadId = $result->getId())) {
             $this->addMessage('leadId - '.$leadId);
@@ -1348,6 +1441,19 @@ trait ActionWebHook
         }
 
         return $this->getResult();
+    }
+
+    /**
+     * @return bool
+     */
+    public function getConfigClinicParam($paramName = null)
+    {
+        if(!$this->_clinic) {
+            $this->addError('Не установлена клиника _clinic для получения параметра amo '.$paramName);
+            return false;
+        }
+
+        return $this->_clinic[$paramName];
     }
 
     /**
@@ -1468,7 +1574,6 @@ trait ActionWebHook
         if(isset($this->requestBody['data']) and isset($this->requestBody['data'][0]) and !empty($this->requestBody['data'][0])) {
             $this->_appointment = $this->requestBody['data'][0];
             $this->addMessage('UMS - Установлено свойство _appointment');
-            //$this->addMessage($this->_appointment);
         }
 
         $this->setAppActionRelation();
@@ -1534,7 +1639,7 @@ trait ActionWebHook
         if($this->hasErrors()) return $this->getResult();
 
         $this->addMessage('id найденного лида '.$lead->getId());
-        $this->addMessage($lead->getId());
+        //$this->addMessage($lead->getId());
 
         $params = [
             'id' => $lead->getId(),

@@ -17,6 +17,7 @@ class m241016_122948_clinics extends Migration
             'id'                    => Schema::TYPE_PK,
 
             'name'                  => Schema::TYPE_STRING . ' NOT NULL',
+            'amo_name'              => Schema::TYPE_STRING,
             'amo_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
             'mis_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
             'api_key'               => Schema::TYPE_STRING,

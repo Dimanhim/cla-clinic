@@ -15,3 +15,5 @@
 
 статус сделки изменен - https://people-yii.vps.madeformed.ru/api/handle/?method=update-status-lead&key=qou35MGsm5di&test=1
 сделка изменена       - https://people-yii.vps.madeformed.ru/api/handle/?method=update-appointment&key=qou35MGsm5di&test=1
+создан визит          - https://people-yii.vps.madeformed.ru/api/handle/?method=create-mis-appointment&key=qou35MGsm5di&test=1
+статус визита изменен - https://people-yii.vps.madeformed.ru/api/handle/?method=update-mis-appointment&key=qou35MGsm5di&test=1

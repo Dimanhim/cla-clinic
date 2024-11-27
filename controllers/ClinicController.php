@@ -31,8 +31,17 @@ class ClinicController extends BaseController
      *
      * @return string
      */
-    public function actionIndex()
+    public function actionIndex($test = false)
     {
+        /*if($test) {
+            $misId = 459;
+            $clinic = Clinic::findModels()->andWhere(['mis_id' => $misId])->one();
+            echo "<pre>";
+            print_r($clinic->attributes);
+            echo "</pre>";
+            exit;
+        }*/
+
         $searchModel = new ClinicSearch();
         $dataProvider = $searchModel->search($this->request->queryParams);
 

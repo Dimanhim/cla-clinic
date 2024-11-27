@@ -57,7 +57,7 @@ class Clinic extends \app\models\BaseModel
         return array_merge(parent::rules(), [
             [['name', 'amo_id', 'mis_id'], 'required'],
             [['amo_id', 'mis_id', 'reception_time'], 'integer'],
-            [['name', 'api_key'], 'string', 'max' => 255],
+            [['name', 'amo_name', 'api_key'], 'string', 'max' => 255],
             [['_steps_create', '_steps_update'], 'safe'],
         ]);
     }
@@ -69,6 +69,7 @@ class Clinic extends \app\models\BaseModel
     {
         return array_merge(parent::attributeLabels(), [
             'name' => 'Название',
+            'amo_name' => 'Название в АМО',
             'amo_id' => 'ID в АМО',
             'mis_id' => 'ID в МИС',
             'api_key' => 'АПИ-ключ',

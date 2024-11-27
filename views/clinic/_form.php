@@ -24,6 +24,7 @@ use app\models\Step;
                 <div class="card-body">
 
                     <?= $form->field($model, 'name')->textInput(['maxlength' => true]) ?>
+                    <?= $form->field($model, 'amo_name')->textInput(['maxlength' => true]) ?>
 
                     <?= $form->field($model, 'amo_id')->textInput() ?>
                     <?= $form->field($model, 'mis_id')->textInput() ?>

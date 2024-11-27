@@ -48,6 +48,7 @@ class WebhookConfig extends Component
                 $this->config['clinics'][$clinic->id] = [
                     'id' => $clinic->id,
                     'name' => $clinic->name,
+                    'amo_name' => $clinic->amo_name ?: $clinic->name,
                     'amo_id' => $clinic->amo_id,
                     'mis_id' => $clinic->mis_id,
                     'reception_time' => $clinic->reception_time,
@@ -61,7 +62,7 @@ class WebhookConfig extends Component
                             $this->config['clinics'][$clinic->id]['status_id'] = $step->amo_id;
                         }
                         if($i == 0 || $step->mis_status) {
-                            $this->config['clinics'][$clinic->id]['update_status'] = $step->amo_id;
+                            $this->config['clinics'][$clinic->id]['update_status'][] = $step->amo_id;
                         }
                         $i++;
                     }
