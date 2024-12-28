@@ -17,7 +17,7 @@ class DoctorSearch extends Doctor
     public function rules()
     {
         return [
-            [['id', 'name', 'amo_id', 'mis_id', 'is_active', 'deleted', 'position', 'created_at', 'updated_at', 'name'], 'safe'],
+            [['id', 'name', 'amo_id', 'mis_id', 'is_active', 'deleted', 'position', 'created_at', 'updated_at', 'name', 'clinic_id'], 'safe'],
         ];
     }
 
@@ -58,6 +58,7 @@ class DoctorSearch extends Doctor
         // grid filtering conditions
         $query->andFilterWhere([
             'id' => $this->id,
+            'clinic_id' => $this->clinic_id,
             'amo_id' => $this->amo_id,
             'mis_id' => $this->mis_id,
             'is_active' => $this->is_active,

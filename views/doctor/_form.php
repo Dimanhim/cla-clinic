@@ -4,6 +4,7 @@ use yii\helpers\Html;
 use yii\widgets\ActiveForm;
 use app\models\Pipeline;
 use kartik\select2\Select2;
+use app\models\Clinic;
 
 /** @var yii\web\View $this */
 /** @var app\models\Pipeline $model */
@@ -22,6 +23,7 @@ use kartik\select2\Select2;
 
                     <?= $form->field($model, 'name')->textInput(['maxlength' => true]) ?>
 
+                    <?= $form->field($model, 'clinic_id')->dropDownList(Clinic::getList(), ['prompt' => '[Не выбрана]']) ?>
                     <?= $form->field($model, 'amo_id')->textInput() ?>
                     <?= $form->field($model, 'mis_id')->textInput() ?>
 

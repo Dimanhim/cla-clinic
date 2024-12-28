@@ -51,6 +51,8 @@ $config = [
             'amo_status_field_id' => 702953,
             'datetime_field_id' => 704837,
             'duration_field_id' => 704839,
+            'duration_field_id' => 704839,
+            'source_field_id' => 705779,
         ],
         'infoLog' => [
             'class' => 'app\components\InfoLog',

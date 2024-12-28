@@ -49,7 +49,7 @@ class Doctor extends \app\models\BaseModel
     public function rules()
     {
         return array_merge(parent::rules(), [
-            [['name', 'amo_id', 'mis_id'], 'required'],
+            [['name', 'amo_id', 'mis_id', 'clinic_id'], 'required'],
             [['amo_id', 'mis_id'], 'integer'],
             [['name'], 'string', 'max' => 255],
         ]);
@@ -62,8 +62,14 @@ class Doctor extends \app\models\BaseModel
     {
         return array_merge(parent::attributeLabels(), [
             'name' => 'ФИО',
+            'clinic_id' => 'Клиника',
             'amo_id' => 'ID в АМО',
             'mis_id' => 'ID в МИС',
         ]);
+    }
+
+    public function getClinic()
+    {
+        return $this->hasOne(Clinic::className(), ['id' => 'clinic_id']);
     }
 }

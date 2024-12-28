@@ -172,6 +172,9 @@ class AmoCrmClient
      */
     function getToken()
     {
+        /*return new AccessToken([
+            'access_token' => $_ENV['AMO_LONG_CODE']
+        ]);*/
         $accessTokenFilePath = self::TOKEN_PATH;
         if (!file_exists($accessTokenFilePath)) {
             exit('Access token file not found');
@@ -181,14 +184,17 @@ class AmoCrmClient
 
         if (
             isset($accessToken)
-            && isset($accessToken['accessToken'])
+            //&& isset($accessToken['accessToken'])
             && isset($accessToken['refreshToken'])
             && isset($accessToken['expires'])
             && isset($accessToken['expires_in'])
             && isset($accessToken['baseDomain'])
         ) {
+            /*return new AccessToken([
+                'access_token' => $_ENV['AMO_LONG_CODE']
+            ]);*/
             return new AccessToken([
-                'access_token' => $accessToken['accessToken'],
+                'access_token' => $_ENV['AMO_LONG_CODE'],
                 'refresh_token' => $accessToken['refreshToken'],
                 'expires' => $accessToken['expires'],
                 'expires_in' => $accessToken['expires_in'],

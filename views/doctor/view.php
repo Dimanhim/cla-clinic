@@ -31,6 +31,15 @@ $this->params['breadcrumbs'][] = $this->title;
         'attributes' => [
             'id',
             'name',
+            [
+                'attribute' => 'clinic_id',
+                'format' => 'raw',
+                'value' => function($data) {
+                    if($data->clinic) {
+                        return $data->clinic->name;
+                    }
+                },
+            ],
             'amo_id',
             'mis_id',
             'is_active:boolean',

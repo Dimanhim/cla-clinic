@@ -263,6 +263,10 @@ trait ActionWebHook
         ) {
             $this->_lead_values = $this->requestBody['leads']['status'][0];
 
+            if($this->_lead_values['id'] == 30656311) {
+                $this->addMessage('_lead_values');
+                $this->addMessage($this->_lead_values);
+            }
             //$this->setLog('hook', $this->_lead_values, '--hook.txt');
 
             $this->setClinic($this->getClinicId());
@@ -271,6 +275,8 @@ trait ActionWebHook
             $this->checkFilterLead();
 
             if(!$this->hasErrors()) {
+
+                $this->setLog('_lead_values', $this->_lead_values, '--lead_values-log.txt');
 
                 $this->addMessage('----------------------------------------------------------');
                 $this->addMessage($this->method);
@@ -319,11 +325,24 @@ trait ActionWebHook
                 $this->addMessage('Установлена клиника _clinic');
                 $this->addMessage($this->_clinic);
 
-                $this->setAppointmentByMisId();
+                //$this->setAppointmentByMisId();
 
                 $this->addMessage('Обновляется сделка '.$this->_lead_values['id']);
 
                 if($this->isStatusForChange()) {
+                    $this->addMessage('Сделка находится в контролируемом статусе');
+
+                    // проверяем custom_datetime
+
+                    //if(!$this->_lead['custom_datetime']) {
+                        $this->getLeadFromAmo();
+                    //}
+                    if($this->hasErrors()) {
+                        $this->addMessage('Перед созданием визита выявлены ошибки:');
+                        $this->addMessage($this->result);
+                        return $this->getResult();
+                    }
+
                     $this->addMessage('Создается визит в МИС');
                     $this->createMisAppointment('update-status');
                 }
@@ -337,6 +356,82 @@ trait ActionWebHook
             }
         }
         return $this->getResult();
+    }
+
+    public function getLeadFromAmo()
+    {
+        sleep(30);
+        $lead = $this->amo->getLead($this->_lead['lead_id']);
+        $this->addMessage('запрос в amo на поиск лида с ID '.$this->_lead['lead_id']);
+        //$this->addMessage($lead);
+        //$this->setLog('amo_lead', $lead, '__amo-lead.txt');
+
+
+
+
+
+        //-----------------------------
+        $leadCustomFieldValues = $lead->getCustomFieldsValues();
+        $this->addMessage('customFieldsValues');
+        $this->addMessage($leadCustomFieldValues);
+        //$this->setLog('_lead_values', $this->_lead_values, '__amo_lead_values.txt');
+        //$this->setLog('lead', $lead, '__amo_lead.txt');
+        //$this->setLog('customFieldValues', $leadCustomFieldValues, '__amo_lead_custom.txt');
+
+        foreach($leadCustomFieldValues as $customFieldValue) {
+            $fieldId = $customFieldValue->fieldId;
+            //$this->setLog('fieldId', $fieldId, '__amo_lead_custom_items.txt');
+
+            // если datetime
+            if(!$this->_lead['custom_datetime']) {
+                if($fieldId == $this->params['datetime_field_id']) {
+                    $this->addMessage('fieldId = '. $fieldId);
+                    if($values = $customFieldValue->values) {
+                        foreach($values as $value) {
+                            $this->addMessage('value = '. $value->value);
+                            $this->_lead_values['custom_fields'][] = [
+                                'id' => $this->params['datetime_field_id'],
+                                'name' => 'Дата|Время визита Rnova',
+                                'values' => [
+                                    $value->value
+                                ],
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // если duration
+            if(!$this->_lead['custom_duration']) {
+                if($fieldId == $this->params['duration_field_id']) {
+                    $this->addMessage('fieldId = '. $fieldId);
+                    if($values = $customFieldValue->values) {
+                        foreach($values as $value) {
+                            $this->addMessage('value = '. $value->value);
+                            $this->_lead_values['custom_fields'][] = [
+                                'id' => $this->params['duration_field_id'],
+                                'name' => 'Длительность визита Rnova',
+                                'values' => [
+                                    [
+                                        'value' => $value->value
+                                    ],
+                                ],
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        $this->addMessage('_lead_values 2');
+        $this->addMessage($this->_lead_values);
+        //-----------------------------
+
+        $this->_lead['custom_datetime'] = $this->getCustomDatetime();
+        $this->_lead['custom_duration'] = $this->getCustomDuration();
+
+        $this->addMessage('Найден и установлен лид');
+        $this->addMessage($this->_lead);
+
     }
 
     /**
@@ -501,7 +596,7 @@ trait ActionWebHook
                 return $this->validateClinicSetApi($amoClinicId);
             }
 
-            $this->addError('Данная воронка не обрабатывается '.$lead['pipeline_id']);
+            $this->addError('Данная воронка не обрабатывается '.$lead['pipeline_id'], true);
             return false;
         }
 
@@ -618,9 +713,6 @@ trait ActionWebHook
      */
     public function getParamsForCreateMisAppointment()
     {
-        file_put_contents('info-log.txt', date('d.m.Y H:i:s').' duration time - '.print_r($this->getDurationTime(), true)."\n", FILE_APPEND);
-        file_put_contents('info-log.txt', date('d.m.Y H:i:s').' _lead_values - '.print_r($this->_lead_values, true)."\n", FILE_APPEND);
-
         if(!$this->_lead['custom_datetime'] || $this->_lead['custom_datetime'] < 3600 * 24) {
             $this->addError('Не установлено время приемаа', true);
             return false;
@@ -878,11 +970,21 @@ trait ActionWebHook
      */
     public function getMisDoctorId()
     {
+        // если к доктору привязана клиника, и ее amo_id = clinic_id в лиде, то прокидываем mis_id этого доктора
+        if($this->params['doctors']) {
+            foreach($this->params['doctors'] as $doctor) {
+                if(!$doctor['clinic_amo_id']) continue;
+                if($doctor['clinic_amo_id'] == $this->_lead['clinic_id'] && $doctor['amo_id'] == $this->_lead['doctor_id']) {
+                    return $doctor['mis_id'];
+                }
+            }
+        }
+
         return $this->getMisParamId($this->_lead['doctor_id'], 'doctors');
     }
 
     /**
-     * получает id клиники из МИС
+     * получает id клиники из МИС*
      * из конфига
      *
      * @return mixed|null
@@ -934,7 +1036,7 @@ trait ActionWebHook
         // получаем сделку
         $lead = $this->amo->getLead($leadId);
 
-        $this->addMessage('amo lead');
+        $this->addMessage('amo lead c ID='.$leadId);
         //$this->addMessage($lead);
 
         // получаем ID ее главного контакта
@@ -995,6 +1097,22 @@ trait ActionWebHook
 
         //return $this->_contact['id'];
     }
+    /*public function getLeadCustomFieldValue($data, $fieldName = null, $attributeName = 'value')
+    {
+        if(!$data or !$fieldName or !array_key_exists($fieldName, $this->fieldIds['leads'])) return false;
+
+        foreach($data['custom_fields'] as $customField) {
+
+            if(in_array($customField['id'], $this->fieldIds['leads'][$fieldName]) and isset($customField['values'])) {
+                if(isset($customField['values'][0]) and isset($customField['values'][0][$attributeName])) return $customField['values'][0][$attributeName];
+                if(isset($customField['values'][$attributeName])) return $customField['values'][$attributeName];
+                if(isset($customField['values'][0]) and !is_array($customField['values'][0])) return $customField['values'][0];
+            }
+        }
+
+        return false;
+    }*/
+
 
     /**
      * приводит _contact в нужный формат

@@ -5,6 +5,7 @@ use yii\helpers\Html;
 use yii\helpers\Url;
 use yii\grid\ActionColumn;
 use himiklab\sortablegrid\SortableGridView;
+use app\models\Clinic;
 
 /** @var yii\web\View $this */
 /** @var app\models\PipelineSearch $searchModel */
@@ -27,6 +28,16 @@ $this->params['breadcrumbs'][] = $this->title;
             ['class' => 'yii\grid\SerialColumn'],
 
             'name',
+            [
+                'attribute' => 'clinic_id',
+                'format' => 'raw',
+                'value' => function($data) {
+                    if($data->clinic) {
+                        return $data->clinic->name;
+                    }
+                },
+                'filter' => Clinic::getList(),
+            ],
             'amo_id',
             'mis_id',
             [

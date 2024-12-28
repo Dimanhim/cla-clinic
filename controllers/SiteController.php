@@ -58,10 +58,32 @@ class SiteController extends Controller
         /*if (Yii::$app->user->isGuest) {
             return $this->redirect(['login']);
         }*/
+        //$config = Yii::$app->webhookConfig->getConfig();
+
 
         /*$amo = new AmoCrmWorkspace($_ENV['AMO_CLIENT_ID'], $_ENV['AMO_SECRET_KEY'], $_ENV['AMO_REDIRECT_URL'], $_ENV['AMO_TEMPORARY_CODE']);
+        $lead = $amo->getLead(30665845);
         echo "<pre>";
-        print_r($amo);
+        print_r($lead);
+        echo "</pre>";
+        exit;*/
+        /*$customFieldValues = $lead->getCustomFieldsValues();
+        foreach($customFieldValues as $customFieldValue) {
+            $fieldId = $customFieldValue->fieldId;
+
+            if($fieldId == $config['datetime_field_id']) {
+                if($values = $customFieldValue->values) {
+                    foreach($values as $value) {
+                        echo "<pre>";
+                        print_r($value->value);
+                        echo "</pre>";
+                        exit;
+                    }
+                }
+            }
+        }
+        echo "<pre>";
+        print_r($customFieldValues);
         echo "</pre>";
         exit;*/
 

@@ -13,6 +13,7 @@ class WebhookConfig extends Component
     public $amo_status_field_id;
     public $datetime_field_id;
     public $duration_field_id;
+    public $source_field_id;
     public $config;
 
     public function init()
@@ -79,6 +80,7 @@ class WebhookConfig extends Component
             foreach($doctors as $doctor) {
                 $this->config['doctors'][] = [
                     'name' => $doctor->name,
+                    'clinic_amo_id' => $doctor->clinic ? $doctor->clinic->amo_id : null,
                     'amo_id' => $doctor->amo_id,
                     'mis_id' => $doctor->mis_id,
                 ];
@@ -99,6 +101,7 @@ class WebhookConfig extends Component
             'mis_status_name' => $this->amo_status_field_id,
             'datetime_field_id' => $this->datetime_field_id,
             'duration_field_id' => $this->duration_field_id,
+            'source_field_id' => $this->source_field_id,
             'pipeline_id' => null,
             'status_id' => null,
             'clinic_id' => null,

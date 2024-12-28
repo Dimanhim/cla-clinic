@@ -17,6 +17,7 @@ class m241016_123046_doctors extends Migration
             'id'                    => Schema::TYPE_PK,
 
             'name'                  => Schema::TYPE_STRING . ' NOT NULL',
+            'clinic_id'             => Schema::TYPE_INTEGER . ' NOT NULL',
             'amo_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
             'mis_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
 
