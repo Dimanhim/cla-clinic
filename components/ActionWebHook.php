@@ -263,10 +263,6 @@ trait ActionWebHook
         ) {
             $this->_lead_values = $this->requestBody['leads']['status'][0];
 
-            if($this->_lead_values['id'] == 30656311) {
-                $this->addMessage('_lead_values');
-                $this->addMessage($this->_lead_values);
-            }
             //$this->setLog('hook', $this->_lead_values, '--hook.txt');
 
             $this->setClinic($this->getClinicId());
@@ -689,8 +685,17 @@ trait ActionWebHook
 
             $this->addMessage('Создан визит с ID '.$appointmentId);
 
-            // отправляем ID визита обратно в АМО
-            $this->setAppointmentIdToAmo($appointmentId, $from);
+            if($request = $this->api->getAppointments(['appointment_id' => $appointmentId])) {
+                $this->addMessage('appointment после создания');
+                $this->addMessage($request);
+                if($request['data'] && $request['error'] == 0) {
+                    $appointment = $request['data'][0] ?? $request['data'];
+                    // отправляем ID визита обратно в АМО
+                    $this->setAppointmentToAmo($appointment, $from);
+                }
+            }
+
+
         }
         else {
             $this->addMessage('misRequest error:');
@@ -870,8 +875,10 @@ trait ActionWebHook
      * отправляет appointment_id обратно в Amo
      * @param integer $appointmentId
      */
-    public function setAppointmentIdToAmo($appointmentId, $from)
+    public function setAppointmentToAmo($appointment, $from)
     {
+        if(!isset($appointment['id'])) return false;
+
         $params = [
             'id' => $this->_lead['lead_id'],
             'custom_fields_values' => [
@@ -880,7 +887,7 @@ trait ActionWebHook
                     'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                     'values' => [
                         [
-                            'value' => $appointmentId,
+                            'value' => (string) $appointment['id'],
                         ]
                     ]
                 ],
@@ -895,6 +902,17 @@ trait ActionWebHook
                 ],
             ],
         ];
+        if(isset($appointment['source'])) {
+            $params['custom_fields_values'][] = [
+                'field_id' => $this->params['source_field_id'],
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $appointment['source'],
+                    ]
+                ]
+            ];
+        }
         /*if($from == 'create') {
             $params['custom_fields_values'][] = [
                 'field_id' => $this->params['mis_status_name'],
@@ -906,9 +924,11 @@ trait ActionWebHook
                 ]
             ];
         }*/
+        //$this->addMessage('параметры отправки appointment в АМО');
+        //$this->addMessage($params);
         $result = $this->amo->updateLead($params);
-        $this->setAppointmentRelationValues([$this->_lead['lead_id'] => $appointmentId]);
-        $this->addMessage('Результат отправки appointmentId='.$appointmentId.' в АМО - ');
+        $this->setAppointmentRelationValues([$this->_lead['lead_id'] => $appointment['id']]);
+        $this->addMessage('Результат отправки appointmentId='.$appointment['id'].' в АМО - ');
         $this->addMessage($result->getId());
 
         return $this->getResult();
@@ -1479,7 +1499,7 @@ trait ActionWebHook
                     'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                     'values' => [
                         [
-                            'value' => $this->_appointment['id'],
+                            'value' => (string) $this->_appointment['id'],
                         ]
                     ]
                 ],
@@ -1497,6 +1517,19 @@ trait ActionWebHook
                     [
                         'value' => $this->_appointment['doctor'],
                         'enum' => $doctorAmoId,
+                    ]
+                ]
+            ];
+        }
+
+        // source
+        if($this->_appointment['source']) {
+            $params['custom_fields_values'][] = [
+                'field_id' => $this->params['source_field_id'],
+                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+                'values' => [
+                    [
+                        'value' => $this->_appointment['source'],
                     ]
                 ]
             ];
