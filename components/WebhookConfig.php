@@ -73,8 +73,10 @@ class WebhookConfig extends Component
 
 
 
-        if($pipeline = Pipeline::findModels()->one()) {
-            $this->config['pipeline_id'] = $pipeline->amo_id;
+        if($pipelines = Pipeline::findModels()->all()) {
+            foreach($pipelines as $pipeline) {
+                $this->config['pipeline_id'][] = $pipeline->amo_id;
+            }
         }
         if($doctors = Doctor::findModels()->all()) {
             foreach($doctors as $doctor) {

@@ -5,6 +5,7 @@ namespace app\components;
 use AmoCRM\Helpers\CustomFieldHelper;
 use app\components\ApiComponent;
 use app\models\Clinic;
+use app\models\Step;
 
 trait ActionWebHook
 {
@@ -568,7 +569,7 @@ trait ActionWebHook
         // проверяем воронку
         if(isset($lead['pipeline_id'])) {
 
-            if($lead['pipeline_id'] == $this->params['pipeline_id']) {
+            if(in_array($lead['pipeline_id'], $this->params['pipeline_id'])) {
 
                 // если хук на изменение, проверяем еще и статусы (этапы) воронки
                 if($this->method == 'update-appointment') {
@@ -1407,8 +1408,6 @@ trait ActionWebHook
         // собираем поля для АМО и прокидываем лид
         $this->createAmoLead();
 
-        if($this->hasErrors()) return $this->getResult();
-
         return $this->getResult();
 
     }
@@ -1423,13 +1422,14 @@ trait ActionWebHook
             $this->addError('Не установлен _appointment для получения клиники', true);
             return false;
         }
-        //$this->addMessage('_appointments установлен');
+        $this->addMessage('_appointments установлен');
         if($clinic = Clinic::findModels()->andWhere(['mis_id' => $this->_appointment['clinic_id']])->one()) {
-            //$this->addMessage('Найдена клиника из запроса ID='.$clinic->id);
+            $this->addMessage('Найдена клиника из запроса ID='.$clinic->id);
             $this->_mis_clinic = $clinic;
-            //$this->addMessage('Установлено свойство _mis_clinic');
-            //$this->addMessage('Ошибки:');
-            //$this->addMessage($this->result);
+            $this->addMessage('Установлено свойство _mis_clinic');
+            $this->addMessage($clinic->attributes);
+            $this->addMessage('Ошибки:');
+            $this->addMessage($this->result);
             return $this->_mis_clinic;
         }
 
@@ -1444,6 +1444,16 @@ trait ActionWebHook
      */
     public function setClinic($amoClinicId = null, $misClinicId = null)
     {
+        $this->addMessage('setClinic');
+        $this->addMessage('amoClinicId');
+        $this->addMessage($amoClinicId);
+        $this->addMessage('misClinicId');
+        $this->addMessage($misClinicId);
+
+        //if($misClinicId) return false;
+        // посмотреть и залогировать _clinic
+        // и что то не так в этой логике
+
         if($amoClinicId && $misClinicId) return false;
 
         if($this->params['clinics']) {
@@ -1457,17 +1467,44 @@ trait ActionWebHook
             }
         }
 
-        else {
+        if(!$this->_clinic) {
             $this->addError('Клиника _clinic не установлена');
         }
     }
 
+    public function getPipelineIdForAmo()
+    {
+        if(!$this->_clinic) {
+            $this->addError('Не установлена клиника _clinic для получения pipeline_id');
+            return false;
+        }
+
+        if($clinic = Clinic::findOne($this->_clinic['id'])) {
+            $this->addMessage('clinic model');
+            $this->addMessage($clinic->attributes);
+            if($updateStatuses = $clinic->updateSteps) {
+                foreach ($updateStatuses as $updateStatus) {
+                    $this->addMessage('clinic update steps');
+                    $this->addMessage($updateStatus);
+                    if($updateStatus->is_active && $updateStatus->pipeline) return $updateStatus->pipeline->amo_id;
+                }
+            }
+        }
+        return false;
+    }
+
     public function createAmoLead()
     {
+        $this->addMessage('create amo lead');
+        $pipelineIdForAmo = $this->getPipelineIdForAmo();
+        $this->addMessage('_clinic');
+        $this->addMessage($this->_clinic);
+        $this->addMessage('pipeline_id for amo');
+        $this->addMessage($pipelineIdForAmo);
         $params = [
             'name' => 'Новая сделка из МИС',
             'status_id' => $this->getConfigClinicParam('status_id'),
-            'pipeline_id' => $this->params['pipeline_id'],
+            'pipeline_id' => $pipelineIdForAmo,
             'custom_fields_values' => [
 
                 // clinic
@@ -1523,7 +1560,7 @@ trait ActionWebHook
         }
 
         // source
-        if($this->_appointment['source']) {
+        if(isset($this->_appointment['source']) && $this->_appointment['source']) {
             $params['custom_fields_values'][] = [
                 'field_id' => $this->params['source_field_id'],
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
@@ -1599,12 +1636,14 @@ trait ActionWebHook
      */
     public function getConfigClinicParam($paramName = null)
     {
+        $this->addMessage('getConfigClinicParam - '.$paramName);
+
         if(!$this->_clinic) {
             $this->addError('Не установлена клиника _clinic для получения параметра amo '.$paramName);
             return false;
         }
 
-        return $this->_clinic[$paramName];
+        return $this->_clinic[$paramName] ?? null;
     }
 
     /**
@@ -1781,10 +1820,10 @@ trait ActionWebHook
             return $this->getResult();
         }
 
-        $lead = $this->amo->getLeadByMisId($this->params['pipeline_id'], $this->_appointment['id'], $this->params['mis_field_id']);
+        $lead = $this->amo->getLeadByMisId(null, $this->_appointment['id'], $this->params['mis_field_id']);
 
         if(!$lead) {
-            $this->addError('Сделка с mis_id '.$this->_appointment['id'].' в воронке '.$this->params['pipeline_id'].' не найдена', true);
+            $this->addError('Сделка с mis_id '.$this->_appointment['id'].' не найдена', true);
         }
 
         if($this->hasErrors()) return $this->getResult();

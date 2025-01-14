@@ -154,22 +154,22 @@ class BaseWebhook
     public function validateWebHook()
     {
         if(!$this->method) {
-            $this->addError('Не указан метод');
+            $this->addError('Не указан метод', true);
             return false;
         }
 
         if(!in_array($this->method, $this->_allowed_methods)) {
-            $this->addError('Метод не существует');
+            $this->addError('Метод не существует', true);
             return false;
         }
 
         if(!$this->webhookKey) {
-            $this->addError('Не указан ключ запроса');
+            $this->addError('Не указан ключ запроса', true);
             return false;
         }
 
         if($this->webhookKey != $_ENV['WEBHOOK_KEY']) {
-            $this->addError('Неверный ключ запроса');
+            $this->addError('Неверный ключ запроса', true);
             return false;
         }
     }
@@ -283,6 +283,6 @@ class BaseWebhook
      */
     private function setLog($name = '', $subject = [], $fileName = 'info-log') {
         //if($this->method != 'create-mis-appointment') return false;
-        file_put_contents($fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".$this->_ident." - ".print_r($subject, true)."\n", FILE_APPEND);
+        file_put_contents('log-'.date('d.m.Y').'-'.$fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".$this->_ident." - ".print_r($subject, true)."\n", FILE_APPEND);
     }
 }
