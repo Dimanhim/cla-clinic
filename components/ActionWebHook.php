@@ -342,6 +342,11 @@ trait ActionWebHook
 
                     $this->addMessage('Создается визит в МИС');
                     $this->createMisAppointment('update-status');
+
+                    // если визит уже создан
+                    if($this->hasErrors()) {
+                        $this->checkLeadDatetimeAndCancelAppointment();
+                    }
                 }
                 else {
                     $this->addMessage('Сделка находитмя в неконтролируемом статусе '.$this->_lead_values['status_id']);
@@ -353,6 +358,25 @@ trait ActionWebHook
             }
         }
         return $this->getResult();
+    }
+
+    public function checkLeadDatetimeAndCancelAppointment()
+    {
+        $this->addMessage('Визит уже создан, нужно отменить errors, lead');
+        $this->addMessage($this->result);
+        $this->addMessage($this->_lead);
+
+        // идем за визитом
+        $this->setAppointmentByMisId();
+
+        $this->addMessage('Обновляется сделка _lead_values '.$this->_lead_values['id']);
+        $this->deleteErrors();
+        //$this->addMessage($this->_lead_values);
+
+        $this->updateMisAppointment();
+
+        // проверяем дату [custom_datetime] => 1738047600
+
     }
 
     public function getLeadFromAmo()
@@ -642,6 +666,9 @@ trait ActionWebHook
             //{
             //$this->cancelAppointment();
             //}
+        }
+        elseif($this->method == 'update-status-lead') {
+            $this->cancelAppointment();
         }
     }
 
@@ -957,7 +984,8 @@ trait ActionWebHook
             }
         }
         if($this->_appointment) {
-            $this->addMessage('Установлен _appointment - '.count($this->_appointment));
+            $this->addMessage('Установлен _appointment - ');
+            $this->addMessage($this->_appointment);
         }
     }
 
@@ -1444,11 +1472,11 @@ trait ActionWebHook
      */
     public function setClinic($amoClinicId = null, $misClinicId = null)
     {
-        $this->addMessage('setClinic');
-        $this->addMessage('amoClinicId');
-        $this->addMessage($amoClinicId);
-        $this->addMessage('misClinicId');
-        $this->addMessage($misClinicId);
+//        $this->addMessage('setClinic');
+//        $this->addMessage('amoClinicId');
+//        $this->addMessage($amoClinicId);
+//        $this->addMessage('misClinicId');
+//        $this->addMessage($misClinicId);
 
         //if($misClinicId) return false;
         // посмотреть и залогировать _clinic
