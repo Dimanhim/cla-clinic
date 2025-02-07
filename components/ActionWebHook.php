@@ -334,6 +334,9 @@ trait ActionWebHook
                     //if(!$this->_lead['custom_datetime']) {
                         $this->getLeadFromAmo();
                     //}
+                    if($this->_lead['mis_id']) {
+                        $this->addError('В сделке уже установлен параметр mis_id='.$this->_lead['mis_id'], true);
+                    }
                     if($this->hasErrors()) {
                         $this->addMessage('Перед созданием визита выявлены ошибки:');
                         $this->addMessage($this->result);
@@ -442,6 +445,27 @@ trait ActionWebHook
                     }
                 }
             }
+
+            // если mis_id
+            if(!$this->_lead['mis_id']) {
+                if($fieldId == $this->params['mis_field_id']) {
+                    $this->addMessage('fieldId = '. $fieldId);
+                    if($values = $customFieldValue->values) {
+                        foreach($values as $value) {
+                            $this->addMessage('value = '. $value->value);
+                            $this->_lead_values['custom_fields'][] = [
+                                'id' => $this->params['mis_field_id'],
+                                'name' => 'МИС id',
+                                'values' => [
+                                    [
+                                        'value' => $value->value
+                                    ],
+                                ],
+                            ];
+                        }
+                    }
+                }
+            }
         }
         $this->addMessage('_lead_values 2');
         $this->addMessage($this->_lead_values);
@@ -449,6 +473,7 @@ trait ActionWebHook
 
         $this->_lead['custom_datetime'] = $this->getCustomDatetime();
         $this->_lead['custom_duration'] = $this->getCustomDuration();
+        $this->_lead['mis_id'] = $this->getMisId();
 
         $this->addMessage('Найден и установлен лид');
         $this->addMessage($this->_lead);
