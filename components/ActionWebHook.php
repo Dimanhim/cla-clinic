@@ -1599,13 +1599,13 @@ trait ActionWebHook
         ];
 
         // doctor
-        if($this->_appointment['doctor_id'] and $this->_appointment['doctor'] and ($doctorAmoId = $this->getAmoDoctorId())) {
+        if($this->_appointment['doctor_id'] and $this->_appointment['doctor'] and ($doctorAmoId = $this->getAmoDoctorId()) and ($doctorAmoName = $this->getAmoDoctorName())) {
             $params['custom_fields_values'][] = [
                 'field_id' => 512391,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                 'values' => [
                     [
-                        'value' => $this->_appointment['doctor'],
+                        'value' => $doctorAmoName,
                         'enum' => $doctorAmoId,
                     ]
                 ]
@@ -1803,6 +1803,19 @@ trait ActionWebHook
         foreach($this->params['doctors'] as $doctor) {
             if($doctor['mis_id'] == $this->_appointment['doctor_id']) {
                 return $doctor['amo_id'];
+            }
+        }
+
+        return false;
+    }
+
+    public function getAmoDoctorName()
+    {
+        if(!isset($this->_appointment['doctor_id'])) return false;
+
+        foreach($this->params['doctors'] as $doctor) {
+            if($doctor['mis_id'] == $this->_appointment['doctor_id']) {
+                return $doctor['name'];
             }
         }
 
