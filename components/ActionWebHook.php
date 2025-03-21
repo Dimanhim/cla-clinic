@@ -140,8 +140,14 @@ trait ActionWebHook
             file_put_contents($this->_app_created_filename, '');
         }
         if($content = file_get_contents($this->_app_created_filename)) {
-            $this->addMessage('Установлено свойство _app_created');
+
             $this->_app_created = json_decode($content, true);
+            if($this->_app_created) {
+                $this->addMessage('Установлено свойство _app_created');
+            }
+            else {
+                $this->addMessage('Ошибка установления свойства _app_created');
+            }
         }
     }
 
@@ -712,7 +718,7 @@ trait ActionWebHook
 
         if($from == 'update-status') {
             $this->deleteErrors();
-            if(array_key_exists($this->_lead_values['id'], $this->_app_created)) {
+            if(is_array($this->_app_created) && array_key_exists($this->_lead_values['id'], $this->_app_created)) {
                 $this->addError('Визит к сделке '.$this->_lead_values['id']. ' уже создавался в системе', true);
                 return $this->getResult();
             }
@@ -1110,7 +1116,6 @@ trait ActionWebHook
         // получаем сделку
         $lead = $this->amo->getLead($leadId);
 
-        $this->addMessage('amo lead c ID='.$leadId);
         //$this->addMessage($lead);
 
         // получаем ID ее главного контакта
@@ -1123,17 +1128,18 @@ trait ActionWebHook
             }
         }
         else {
-            $this->addError('setContact Сделка из АМО не получена');
+            $this->addError('setContact Сделка из АМО не получена', true);
         }
 
         if($leadContactId) {
-            $this->setLog('leadContactId', $leadContactId, '--contact.txt');
+            $this->addMessage('leadContactId:');
+            $this->addMessage($leadContactId);
 
             // получаем контакт по его ID
             if($contact = $this->amo->getContact($leadContactId)) {
 
                 $this->_contact['id'] = $contact->id;
-                $this->setLog('contact', $contact, '--contact.txt');
+                $this->addMessage('получен contact');
                 if($customFieldValues = $contact->getCustomFieldsValues()) {
                     foreach($customFieldValues as $customFieldValue) {
                         $fieldId = $customFieldValue->fieldId;
@@ -1153,20 +1159,21 @@ trait ActionWebHook
                     }
                 }
                 else {
-                    $this->addError('setContact customFieldValues контакта ' . $contact->id . ' не получены');
+                    $this->addError('setContact customFieldValues контакта ' . $contact->id . ' не получены', true);
                 }
 
 
                 // приводим полученные контакты _contacts в нужный формат
                 $this->prepareContactAttributes($contact);
-                //$this->setLog('contact', $this->_contact, '--_contact.txt');
+                $this->addMessage('_contact');
+                $this->addMessage($this->_contact);
             }
             else {
-                $this->addError('setContact Контакт из АМО не получен по ID ' . $leadContactId);
+                $this->addError('setContact Контакт из АМО не получен по ID ' . $leadContactId, true);
             }
         }
         else {
-            $this->addError('setContact ID главного контакта из АМО не получен');
+            $this->addError('setContact ID главного контакта из АМО не получен', true);
         }
 
         //return $this->_contact['id'];

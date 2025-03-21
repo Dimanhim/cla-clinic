@@ -20,8 +20,12 @@ $config = [
             'cookieValidationKey' => 'XAa-0zlrc4kfgMuLeSVufjMZlh9Kh8L2',
             'baseUrl' => '',
         ],
-        'cache' => [
+        /*'cache' => [
             'class' => 'yii\caching\FileCache',
+        ],*/
+        'cache' => [
+            'class' => 'yii\caching\MemCache',
+            'useMemcached' => false,
         ],
         'user' => [
             'identityClass' => 'app\models\User',
