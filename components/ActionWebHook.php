@@ -719,8 +719,11 @@ trait ActionWebHook
         if($from == 'update-status') {
             $this->deleteErrors();
             if(is_array($this->_app_created) && array_key_exists($this->_lead_values['id'], $this->_app_created)) {
-                $this->addError('Визит к сделке '.$this->_lead_values['id']. ' уже создавался в системе', true);
-                return $this->getResult();
+                // здесь проверка на существование mis_id
+//                if($this->_lead && isset($this->_lead['mis_id']) && $this->_lead['mis_id']) {
+                    $this->addError('Визит к сделке '.$this->_lead_values['id']. ' уже создавался в системе', true);
+                    return $this->getResult();
+//                }
             }
         }
         else {
