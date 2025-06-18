@@ -36,6 +36,7 @@ class AmoCrmWorkspace extends AmoCrmClient
             try {
                 return $this->apiClient->contacts()->addOne($contact);
             } catch (AmoCRMApiException $e) {
+                file_put_contents('test_trace-contact-log.txt', date('d.m.Y H:i:s').' АМО Контакт не добавлен - '.print_r($e, true)."\n", FILE_APPEND);
                 return false;
             }
         }

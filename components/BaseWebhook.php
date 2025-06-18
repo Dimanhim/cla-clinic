@@ -9,6 +9,10 @@ class BaseWebhook
     public $_ident;
     public $_mis_clinic;
 
+    public $avaliable_pipelines = [
+        3261094, 3389653, 3840244
+    ];
+
     // клиника из конфига
     public $_clinic;
 

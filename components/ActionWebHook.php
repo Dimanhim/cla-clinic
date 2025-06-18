@@ -718,12 +718,14 @@ trait ActionWebHook
 
         if($from == 'update-status') {
             $this->deleteErrors();
-            if(is_array($this->_app_created) && array_key_exists($this->_lead_values['id'], $this->_app_created)) {
-                // здесь проверка на существование mis_id
+            if(!in_array($this->_lead_values['pipeline_id'], $this->avaliable_pipelines)) {
+                if(is_array($this->_app_created) && array_key_exists($this->_lead_values['id'], $this->_app_created)) {
+                    // здесь проверка на существование mis_id
 //                if($this->_lead && isset($this->_lead['mis_id']) && $this->_lead['mis_id']) {
                     $this->addError('Визит к сделке '.$this->_lead_values['id']. ' уже создавался в системе', true);
                     return $this->getResult();
 //                }
+                }
             }
         }
         else {
@@ -1702,7 +1704,7 @@ trait ActionWebHook
         $this->addMessage('getConfigClinicParam - '.$paramName);
 
         if(!$this->_clinic) {
-            $this->addError('Не установлена клиника _clinic для получения параметра amo '.$paramName);
+            $this->addError('Не установлена клиника _clinic для получения параметра amo '.$paramName, true);
             return false;
         }
 
@@ -1736,7 +1738,7 @@ trait ActionWebHook
         $this->addMessage('Создание контакта в АМО');
         $params = [];
 
-        if($this->_appointment['patient_name']) {
+        if(!empty($this->_appointment['patient_name'])) {
             $params['name'] = $this->_appointment['patient_name'];
             $params['custom_fields_values'][] = [
                 'field_id' => 172333,
@@ -1748,7 +1750,7 @@ trait ActionWebHook
                 ]
             ];
         }
-        if($this->_appointment['patient_gender']) {
+        if(!empty($this->_appointment['patient_gender'])) {
             $params['custom_fields_values'][] = [
                 'field_id' => 493129,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
@@ -1759,7 +1761,7 @@ trait ActionWebHook
                 ]
             ];
         }
-        if($this->_appointment['patient_birth_date']) {
+        if(!empty($this->_appointment['patient_birth_date'])) {
             $params['custom_fields_values'][] = [
                 'field_id' => 327131,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
@@ -1770,7 +1772,7 @@ trait ActionWebHook
                 ]
             ];
         }
-        if($this->_appointment['patient_phone']) {
+        if(!empty($this->_appointment['patient_phone'])) {
             $params['custom_fields_values'][] = [
                 'field_id' => 19193,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
@@ -1781,7 +1783,7 @@ trait ActionWebHook
                 ]
             ];
         }
-        if($this->_appointment['patient_email']) {
+        if(!empty($this->_appointment['patient_email'])) {
             $params['custom_fields_values'][] = [
                 'field_id' => 19195,
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
@@ -1793,9 +1795,13 @@ trait ActionWebHook
             ];
         }
 
+        $this->addMessage('Поля для создания контакта');
+        $this->addMessage($params);
+
         $result = $this->amo->addContact($params);
 
         $this->addMessage('Создается контакт');
+        $this->addMessage($result);
 
         $this->_create_amo_contacts++;
 
