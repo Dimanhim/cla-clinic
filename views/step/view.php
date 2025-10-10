@@ -43,6 +43,7 @@ $this->params['breadcrumbs'][] = $this->title;
             'amo_id',
             'amo_status:boolean',
             'mis_status:boolean',
+            'is_for_cancel:boolean',
             'is_active:boolean',
             //'created_at:datetime',
         ],

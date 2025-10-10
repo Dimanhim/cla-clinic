@@ -49,7 +49,7 @@ class Step extends \app\models\BaseModel
     {
         return array_merge(parent::rules(), [
             [['name', 'pipeline_id', 'amo_id'], 'required'],
-            [['amo_id', 'amo_status', 'mis_status'], 'integer'],
+            [['amo_id', 'amo_status', 'mis_status', 'is_for_cancel'], 'integer'],
             [['name'], 'string', 'max' => 255],
         ]);
     }
@@ -65,6 +65,7 @@ class Step extends \app\models\BaseModel
             'amo_id' => 'Amo ID',
             'amo_status' => 'Для создания сделки в АМО',
             'mis_status' => 'Для создания визита в МИС',
+            'is_for_cancel' => 'Для отмены визитов в МИС',
         ]);
     }
 
@@ -92,5 +93,19 @@ class Step extends \app\models\BaseModel
             }
         }
         return $data;
+    }
+
+    /**
+     * @return array
+     */
+    public static function statusesForCancel()
+    {
+        $data = [];
+        if($steps = self::find()->select(['amo_id'])->where(['is_for_cancel' => 1])->asArray()->all()) {
+            foreach($steps as $step) {
+                $data[] = $step['amo_id'];
+            }
+        }
+        return array_unique($data);
     }
 }

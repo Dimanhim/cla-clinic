@@ -34,6 +34,8 @@ use kartik\select2\Select2;
 
                     <?= $form->field($model, 'mis_status')->checkbox() ?>
 
+                    <?= $form->field($model, 'is_for_cancel')->checkbox() ?>
+
                     <?= $form->field($model, 'is_active')->checkbox() ?>
 
                     <div class="form-group">

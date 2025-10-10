@@ -48,6 +48,10 @@ $this->params['breadcrumbs'][] = $this->title;
                 'format' => 'boolean',
             ],
             [
+                'attribute' => 'is_for_cancel',
+                'format' => 'boolean',
+            ],
+            [
                 'attribute' => 'is_active',
                 'format' => 'boolean',
             ],

@@ -332,6 +332,12 @@ trait ActionWebHook
 
                 $this->addMessage('Обновляется сделка '.$this->_lead_values['id']);
 
+                // если статус отменяющий визит
+                if($this->isStatusForCancel()) {
+                    $this->cancelAppointment();
+                    return $this->getResult();
+                }
+
                 if($this->isStatusForChange()) {
                     $this->addMessage('Сделка находится в контролируемом статусе');
 
@@ -918,16 +924,21 @@ trait ActionWebHook
      */
     public function cancelAppointment()
     {
+        $this->addMessage('отменяем сделку '. $this->_lead['lead_id']);
         if(!isset($this->_app_created[$this->_lead['lead_id']])) {
             $this->addError('Сделка для отмены не найдена по lead_id '.$this->_lead['lead_id'], true);
             return $this->getResult();
         }
+
         $appointmentIdForCancel = $this->_app_created[$this->_lead['lead_id']];
         $this->_canceled_appointment_id = $appointmentIdForCancel;
+
+        $this->addMessage('id визита для отмены - '.$appointmentIdForCancel);
 
         $canceledAppointment = $this->api->cancelAppointment(['appointment_id' => $appointmentIdForCancel]);
 
         if(!$canceledAppointment or !isset($canceledAppointment['data']) or !$canceledAppointment['data'] or is_array($canceledAppointment['data'])) {
+            $this->setLog('невозможно отменить визит', $canceledAppointment, 'info');
             $this->addError('Невозможно отменить визит', true);
             return $this->getResult();
         }
@@ -1104,6 +1115,16 @@ trait ActionWebHook
             }
         }
         return false;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isStatusForCancel()
+    {
+        if(empty($this->_lead['pipeline_status_id']) || empty($this->params['statuses_for_cancel'])) return false;
+
+        return in_array($this->_lead['pipeline_status_id'], $this->params['statuses_for_cancel']);
     }
 
     /**
@@ -1638,14 +1659,29 @@ trait ActionWebHook
         }
 
         // услугу прокидываем в комментарий к сделке
-        if(isset($this->_appointment['services']) and isset($this->_appointment['services'][0])) {
+//        if(isset($this->_appointment['services']) and isset($this->_appointment['services'][0])) {
+//            $params['custom_fields_values'][] = [
+//                //'field_id' => 172013,
+//                'field_id' => 686369,
+//                'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
+//                'values' => [
+//                    [
+//                        'value' => $this->_appointment['services'][0]['title'],
+//                    ]
+//                ]
+//            ];
+//        }
+        if(!empty($this->_appointment['services'])) {
+            $appointmentServices = $this->getAppointmentServices();
+            $this->addMessage('Услуги визита '.$this->_appointment['id']);
+            $this->addMessage($appointmentServices);
             $params['custom_fields_values'][] = [
                 //'field_id' => 172013,
-                'field_id' => 686369,
+                'field_id' => $this->params['services_field_id'],
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                 'values' => [
                     [
-                        'value' => $this->_appointment['services'][0]['title'],
+                        'value' => implode('; ', $appointmentServices),
                     ]
                 ]
             ];
@@ -1694,6 +1730,16 @@ trait ActionWebHook
         }
 
         return $this->getResult();
+    }
+
+    /**
+     * @return array
+     */
+    public function getAppointmentServices()
+    {
+        return array_map(function($item) {
+            return $item['title'] . ' кол-во:' . $item['count'] . ' сто-ть:' . $item['value'];
+        }, $this->_appointment['services']);
     }
 
     /**

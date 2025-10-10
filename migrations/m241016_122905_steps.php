@@ -21,6 +21,7 @@ class m241016_122905_steps extends Migration
             'amo_id'                => Schema::TYPE_INTEGER . ' NOT NULL',
             'amo_status'            => Schema::TYPE_SMALLINT,
             'mis_status'            => Schema::TYPE_SMALLINT,
+            'is_for_cancel'         => Schema::TYPE_SMALLINT,
 
             'is_active'             => Schema::TYPE_SMALLINT . ' DEFAULT 1',
             'deleted'               => Schema::TYPE_SMALLINT,

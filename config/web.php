@@ -57,6 +57,7 @@ $config = [
             'duration_field_id' => 704839,
             'duration_field_id' => 704839,
             'source_field_id' => 705779,
+            'services_field_id' => 686369,
         ],
         'infoLog' => [
             'class' => 'app\components\InfoLog',

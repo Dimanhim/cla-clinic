@@ -5,6 +5,7 @@ namespace app\components;
 use app\models\Clinic;
 use app\models\Doctor;
 use app\models\Pipeline;
+use app\models\Step;
 use yii\base\Component;
 
 class WebhookConfig extends Component
@@ -14,6 +15,7 @@ class WebhookConfig extends Component
     public $datetime_field_id;
     public $duration_field_id;
     public $source_field_id;
+    public $services_field_id;
     public $config;
 
     public function init()
@@ -29,6 +31,7 @@ class WebhookConfig extends Component
             $this->config['clinic'] = $clinic->name;
             $this->config['clinic_mis_id'] = $clinic->mis_id;
             $this->config['time'] = $clinic->reception_time;
+            $this->config['statuses_for_cancel'] = [];
 
             if($steps = $clinic->updateSteps) {
                 $i = 0;
@@ -71,7 +74,7 @@ class WebhookConfig extends Component
             }
         }
 
-
+        $this->config['statuses_for_cancel'] = Step::statusesForCancel();
 
         if($pipelines = Pipeline::findModels()->all()) {
             foreach($pipelines as $pipeline) {
@@ -104,6 +107,7 @@ class WebhookConfig extends Component
             'datetime_field_id' => $this->datetime_field_id,
             'duration_field_id' => $this->duration_field_id,
             'source_field_id' => $this->source_field_id,
+            'services_field_id' => $this->services_field_id,
             'pipeline_id' => null,
             'status_id' => null,
             'clinic_id' => null,

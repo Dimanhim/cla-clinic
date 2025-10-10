@@ -17,7 +17,7 @@ class StepSearch extends Step
     public function rules()
     {
         return [
-            [['id','pipeline_id', 'amo_id', 'is_active', 'deleted', 'position', 'created_at', 'updated_at', 'name', 'amo_status', 'mis_status'], 'safe'],
+            [['id','pipeline_id', 'amo_id', 'is_active', 'deleted', 'position', 'created_at', 'updated_at', 'name', 'amo_status', 'mis_status', 'is_for_cancel'], 'safe'],
         ];
     }
 
@@ -62,6 +62,7 @@ class StepSearch extends Step
             'amo_id' => $this->amo_id,
             'amo_status' => $this->amo_status,
             'mis_status' => $this->mis_status,
+            'is_for_cancel' => $this->is_for_cancel,
             'is_active' => $this->is_active,
             'deleted' => $this->deleted,
             'position' => $this->position,
