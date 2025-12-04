@@ -151,6 +151,25 @@ trait ActionWebHook
         }
     }
 
+    public function unsetAppCreatedRelation($appointmentId = null, $leadId = null)
+    {
+        if(!$appointmentId && !$leadId) return false;
+
+        if($appointmentId) {
+            $key = array_search($appointmentId, $this->_app_created);
+            unset($this->_app_created[$key]);
+        }
+
+        if($leadId) {
+            if(isset($this->_app_created[$leadId])) {
+                unset($this->_app_created[$leadId]);
+            }
+        }
+
+        file_put_contents($this->_app_created_filename, json_encode($this->_app_created));
+
+    }
+
     /**
      * @param array $values
      * @return bool|mixed
@@ -346,9 +365,12 @@ trait ActionWebHook
                     //if(!$this->_lead['custom_datetime']) {
                         $this->getLeadFromAmo();
                     //}
-                    if($this->_lead['mis_id']) {
+                    //
+                    //if($this->_lead['mis_id']) {
+                    if($this->unableForUpdate()) {
                         $this->addError('В сделке уже установлен параметр mis_id='.$this->_lead['mis_id'], true);
                     }
+
                     if($this->hasErrors()) {
                         $this->addMessage('Перед созданием визита выявлены ошибки:');
                         $this->addMessage($this->result);
@@ -373,6 +395,16 @@ trait ActionWebHook
             }
         }
         return $this->getResult();
+    }
+
+    public function unableForUpdate()
+    {
+        if(!$this->_lead['mis_id']) return false;
+        $appointmentId = $this->_app_created[$this->_lead['lead_id']] ?? null;
+
+        if(!$appointmentId) return false;
+
+        return !!$this->_lead['mis_id'];
     }
 
     public function checkLeadDatetimeAndCancelAppointment()
@@ -943,6 +975,7 @@ trait ActionWebHook
             return $this->getResult();
         }
 
+        $this->unsetAppCreatedRelation($appointmentIdForCancel);
         $this->addMessage('Отменен визит '.$appointmentIdForCancel);
     }
 
