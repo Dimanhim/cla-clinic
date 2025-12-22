@@ -367,6 +367,7 @@ trait ActionWebHook
                     //}
                     //
                     //if($this->_lead['mis_id']) {
+                    // ???
                     if($this->unableForUpdate()) {
                         $this->addError('В сделке уже установлен параметр mis_id='.$this->_lead['mis_id'], true);
                     }
@@ -786,7 +787,7 @@ trait ActionWebHook
             $appointmentId = $misRequest['data'];
 
             $this->addMessage('Создан визит с ID '.$appointmentId);
-
+            sleep(1);
             if($request = $this->api->getAppointments(['appointment_id' => $appointmentId])) {
                 $this->addMessage('appointment после создания');
                 $this->addMessage($request);
