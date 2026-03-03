@@ -5,6 +5,7 @@ namespace app\components;
 use AmoCRM\Helpers\CustomFieldHelper;
 use app\components\ApiComponent;
 use app\models\Clinic;
+use app\models\Doctor;
 use app\models\Step;
 
 trait ActionWebHook
@@ -1514,12 +1515,16 @@ trait ActionWebHook
             $this->addMessage($this->_appointment);
         }
 
+        sleep(2);
+
         $this->setAppActionRelation();
 
         // проверяем установлен ли визит и не прокидывался он ранее в АМО
         $this->checkCreatedAppointment();
 
         $this->setMisClinic();
+
+        $this->checkDoctorAvaliable();
 
         if($this->hasErrors()) return $this->getResult();
 
@@ -1555,6 +1560,26 @@ trait ActionWebHook
 
         $this->addError('Не найдена клиника из запроса', true);
         return false;
+    }
+
+    public function checkDoctorAvaliable()
+    {
+        if($this->hasErrors()) {
+            $this->addError('При проверке доктора '.$this->_appointment['doctor_id'].' найдены ошибки', true);
+            return false;
+        }
+        $misClinic = $this->_mis_clinic;
+
+        $doctorId = $this->_appointment['doctor_id'];
+
+        $exists = Doctor::findModels()->andWhere(['clinic_id' => $misClinic->id, 'mis_id' => $doctorId])->exists();
+
+        if(!$exists) {
+            $this->addError('Доктор '.$this->_appointment['doctor_id'].' в системе не найден', true);
+            return false;
+        }
+
+        $this->addMessage('Доктор '.$this->_appointment['doctor_id'].' в системе найден');
     }
 
     /**

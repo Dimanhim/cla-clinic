@@ -287,6 +287,6 @@ class BaseWebhook
      */
     private function setLog($name = '', $subject = [], $fileName = 'info-log') {
         //if($this->method != 'create-mis-appointment') return false;
-        file_put_contents('log-'.date('d.m.Y').'-'.$fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".$this->_ident." - ".print_r($subject, true)."\n", FILE_APPEND);
+        file_put_contents(date('Y-m-d') . '-log-'.$fileName.'.txt', date('d.m.Y H:i:s')." {$name} - ".$this->_ident." - ".print_r($subject, true)."\n", FILE_APPEND);
     }
 }
