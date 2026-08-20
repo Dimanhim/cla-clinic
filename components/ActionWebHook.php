@@ -6,6 +6,7 @@ use AmoCRM\Helpers\CustomFieldHelper;
 use app\components\ApiComponent;
 use app\models\Clinic;
 use app\models\Doctor;
+use app\models\Relation;
 use app\models\Step;
 
 trait ActionWebHook
@@ -137,6 +138,15 @@ trait ActionWebHook
      */
     public function setAppCreatedRelation()
     {
+        $this->_app_created = Relation::getRelations();
+        if($this->_app_created) {
+            $this->addMessage('Установлено свойство _app_created');
+        }
+        else {
+            $this->addMessage('Ошибка установления свойства _app_created');
+        }
+        return true;
+
         if(!file_exists($this->_app_created_filename)) {
             file_put_contents($this->_app_created_filename, '');
         }
@@ -155,6 +165,10 @@ trait ActionWebHook
     public function unsetAppCreatedRelation($appointmentId = null, $leadId = null)
     {
         if(!$appointmentId && !$leadId) return false;
+
+        Relation::deleteRelation($leadId, $appointmentId);
+        $this->setAppActionRelation();
+        return true;
 
         if($appointmentId) {
             $key = array_search($appointmentId, $this->_app_created);
@@ -192,11 +206,16 @@ trait ActionWebHook
         $misAppointmentId = $values[$amoLeadId];
         if(!$amoLeadId or !$misAppointmentId) return false;
 
+        Relation::setRelation($amoLeadId, $misAppointmentId);
+        $this->addMessage('В файл установлен новый визит '.$amoLeadId.' - '.$misAppointmentId);
+        $this->setAppCreatedRelation();
+        //return true;
+
         $content[$amoLeadId] = $misAppointmentId;
 
         file_put_contents($this->_app_created_filename, json_encode($content));
-        $this->addMessage('В файл установлен новый визит '.$amoLeadId.' - '.$misAppointmentId);
-        $this->setAppCreatedRelation();
+        //$this->addMessage('В файл установлен новый визит '.$amoLeadId.' - '.$misAppointmentId);
+        //$this->setAppCreatedRelation();
 
     }
 
@@ -817,6 +836,17 @@ trait ActionWebHook
         return $this->getLeadCustomFieldValue($this->_lead_values, 'custom_duration') ?: $this->params['time'];
     }
 
+    public static function setBasePhoneFormat($phone)
+    {
+        $res = preg_replace('/[^0-9]/', '', $phone);
+
+        if (strlen($res) === 11 && $res[0] === '8') {
+            $res[0] = '7';
+        }
+
+        return '+' . $res;
+    }
+
     /**
      * @return array
      */
@@ -830,7 +860,7 @@ trait ActionWebHook
         $params = [
             //'first_name' => $this->_lead['client_name'],
             'birth_date' => date('d.m.Y', $this->_lead['client_birthday'] + 6 * 3600),
-            'mobile' => $this->_lead['client_phone'],
+            'mobile' => self::setBasePhoneFormat($this->_lead['client_phone']),
             'gender' => $this->_lead['client_gender'] ? ($this->_lead['client_gender'] == 'М' ? 1 : 2) : null,
             'email' => $this->_lead['client_email'],
             'doctor_id' => $this->getMisDoctorId(),
@@ -977,7 +1007,7 @@ trait ActionWebHook
             return $this->getResult();
         }
 
-        $this->unsetAppCreatedRelation($appointmentIdForCancel);
+        $this->unsetAppCreatedRelation($appointmentIdForCancel, $this->_lead['lead_id']);
         $this->addMessage('Отменен визит '.$appointmentIdForCancel);
     }
 

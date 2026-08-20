@@ -36,7 +36,7 @@ class AmoCrmWorkspace extends AmoCrmClient
             try {
                 return $this->apiClient->contacts()->addOne($contact);
             } catch (AmoCRMApiException $e) {
-                file_put_contents('test_trace-contact-log.txt', date('d.m.Y H:i:s').' АМО Контакт не добавлен - '.print_r($e, true)."\n", FILE_APPEND);
+                //file_put_contents('test_trace-contact-log.txt', date('d.m.Y H:i:s').' АМО Контакт не добавлен - '.print_r($e, true)."\n", FILE_APPEND);
                 return false;
             }
         }
@@ -162,12 +162,12 @@ class AmoCrmWorkspace extends AmoCrmClient
         try
         {
             $data = $this->apiClient->contacts()->get($filter);
-            file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО контакт по телефону найден - '.print_r('', true)."\n", FILE_APPEND);
+            //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО контакт по телефону найден - '.print_r('', true)."\n", FILE_APPEND);
             return $this->getFirstContactId($data);
         }
         catch (AmoCRMApiException $ex)
         {
-            file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО контакт по телефону не найден - '.print_r('', true)."\n", FILE_APPEND);
+            //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО контакт по телефону не найден - '.print_r('', true)."\n", FILE_APPEND);
             return false;
         }
     }
@@ -225,7 +225,7 @@ class AmoCrmWorkspace extends AmoCrmClient
             return $this->apiClient->leads()->get();
         }
         catch (\Exception $e) {
-            file_put_contents('amo-errors-log.txt', date('d.m.Y H:i:s').'e - '.print_r($e, true)."\n", FILE_APPEND);
+            file_put_contents(date('Y-m-d') . 'amo-errors-log.txt', date('d.m.Y H:i:s').'e - '.print_r($e, true)."\n", FILE_APPEND);
             return false;
         }
     }
@@ -243,10 +243,10 @@ class AmoCrmWorkspace extends AmoCrmClient
             $lead = LeadModel::fromArray($params);
             try {
                 $leadModel = $this->apiClient->leads()->updateOne($lead);
-                file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' - '.print_r('АМО Сделка обновлена', true)."\n", FILE_APPEND);
+                //file_put_contents(date('Y-m-d') . 'test_trace-log.txt', date('d.m.Y H:i:s').' - '.print_r('АМО Сделка обновлена', true)."\n", FILE_APPEND);
                 return $leadModel;
             } catch (AmoCRMApiException $e) {
-                file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО сделка не обновлена - '.print_r($e, true)."\n", FILE_APPEND);
+                //file_put_contents(date('Y-m-d') . 'test_trace-log.txt', date('d.m.Y H:i:s').' АМО сделка не обновлена - '.print_r($e, true)."\n", FILE_APPEND);
                 return false;
             }
         }
@@ -275,17 +275,17 @@ class AmoCrmWorkspace extends AmoCrmClient
 
     public function addLead($params = [])
     {
-        file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' addLead params count - '.print_r(count($params), true)."\n", FILE_APPEND);
+        //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' addLead params count - '.print_r(count($params), true)."\n", FILE_APPEND);
         if(!$params) return false;
 
         $lead = LeadModel::addFromArray($params);
-        file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' lead - '.print_r($lead, true)."\n", FILE_APPEND);
+        //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' lead - '.print_r($lead, true)."\n", FILE_APPEND);
         try {
             $leadModel = $this->apiClient->leads()->addOne($lead);
-            file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' - '.print_r('АМО Сделка добавлена', true)."\n", FILE_APPEND);
+            //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' - '.print_r('АМО Сделка добавлена', true)."\n", FILE_APPEND);
             return $leadModel;
         } catch (AmoCRMApiException $e) {
-            file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО Сделка не добавлена - '.print_r($e, true)."\n", FILE_APPEND);
+            //file_put_contents('test_trace-log.txt', date('d.m.Y H:i:s').' АМО Сделка не добавлена - '.print_r($e, true)."\n", FILE_APPEND);
             return false;
         }
 
