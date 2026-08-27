@@ -36,3 +36,6 @@ config/db.php
 
 .env
 /frontend/web/amo_access.json
+
+# local Let's Encrypt tooling & private keys (do not commit)
+/_le/

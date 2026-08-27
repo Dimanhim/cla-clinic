@@ -20,13 +20,15 @@ $config = [
             'cookieValidationKey' => 'XAa-0zlrc4kfgMuLeSVufjMZlh9Kh8L2',
             'baseUrl' => '',
         ],
-        /*'cache' => [
+        'cache' => [
             'class' => 'yii\caching\FileCache',
-        ],*/
+        ],
+        /* На shared-хостинге Memcached обычно нет (127.0.0.1:11211 → connection refused).
         'cache' => [
             'class' => 'yii\caching\MemCache',
             'useMemcached' => false,
         ],
+        */
         'user' => [
             'identityClass' => 'app\models\User',
             'enableAutoLogin' => true,
