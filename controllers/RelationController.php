@@ -14,6 +14,7 @@ use yii\filters\VerbFilter;
  */
 class RelationController extends BaseController
 {
+    private const IMPORT_DUPLICATE_DATE = '2026-08-20';
     /**
      * @inheritDoc
      */
@@ -158,9 +159,12 @@ class RelationController extends BaseController
     /**
      * Дедупликация relations: /relation/dedupe?step=1|2|3
      *
-     * step=1 — собрать группы дублей, залогировать, вывести сводку
-     * step=2 — п.1 + список id на удаление (только активные deleted IS NULL), залогировать, вывести количество
-     * step=3 — п.1–2 + soft delete, залогировать результат
+     * Один скрипт из трёх частей:
+     * 1. Сбор массива дублей → relation-dedupe_step_1-log.txt
+     * 2. Id на удаление из п.1 → relation-dedupe_step_2-log.txt
+     * 3. Удаление из п.2 → relation-dedupe_step_3-log.txt
+     *
+     * step=1 — только п.1; step=2 — п.1+2; step=3 — п.1+2+3.
      */
     public function actionDedupe()
     {
@@ -171,41 +175,87 @@ class RelationController extends BaseController
             );
         }
 
+        return $this->runDedupe($step);
+    }
+
+    /**
+     * @param int $step
+     * @return string
+     */
+    private function runDedupe(int $step): string
+    {
+        // 1. Собираем массив дублей
         $doubles = $this->collectDuplicateGroups();
-        $idsToDelete = $this->getDuplicateIdsToDelete($doubles);
+        $summary = $this->buildDuplicateSummary($doubles);
+        $this->appendDedupeStepLog(1, [
+            'SUMMARY' => $summary,
+            'GROUPS' => $doubles,
+        ]);
 
         if($step === 1) {
-            $summary = $this->buildDuplicateSummary($doubles);
-            $this->logDedupe('step=1 summary', $summary);
-            $this->logDedupe('step=1 groups', $doubles);
-
             return $this->formatDedupeResponse(implode("\n", [
                 'Шаг 1: сбор дублей завершён',
-                'Групп дублей (lead_id + appointment_id): ' . $summary['groups_count'],
-                'Всего лишних строк в группах: ' . $summary['extra_rows_count'],
-                'Из них активных (deleted IS NULL): ' . $summary['active_extra_rows_count'],
-                'Примеры (до 10 групп):',
+                'Групп (lead_id + appointment_id): ' . $summary['groups_count'],
+                'С оригиналом deleted=1: ' . $summary['with_original_count'],
+                'Без оригинала deleted=1: ' . $summary['without_original_count'],
+                'К удалению всего (deleted IS NULL): ' . $summary['to_delete_count'],
+                'К удалению за ' . $summary['import_date_label'] . ' (шаги 2–3): ' . $summary['import_to_delete_count'],
+                '',
+                'Примеры (до 10 групп, даты в формате дд.мм.гггг чч:мм:сс):',
                 $this->formatDuplicateExamples($doubles, 10),
-                'Полный массив записан в relation-dedupe-log.txt',
+                '',
+                'Лог: ' . $this->getDedupeStepLogFile(1),
             ]));
         }
 
-        if($step === 2) {
-            $summary = $this->buildDuplicateSummary($doubles);
-            $this->logDedupe('step=2 summary', $summary);
-            $this->logDedupe('step=2 ids_to_delete', $idsToDelete);
+        // 2. Id на удаление из массива п.1
+        $deleteList = $this->buildDeleteList($doubles);
+        $idsToDelete = $this->getDuplicateIdsToDelete($doubles);
+        $this->appendDedupeStepLog(2, [
+            'IMPORT_DATE' => self::IMPORT_DUPLICATE_DATE,
+            'COUNT' => count($deleteList),
+            'IDS' => $idsToDelete,
+            'DELETE_LIST' => $deleteList,
+        ]);
 
+        if($step === 2) {
             return $this->formatDedupeResponse(implode("\n", [
-                'Шаг 2: id на удаление (активные дубли, кроме самой старой записи в группе)',
-                'Групп дублей: ' . $summary['groups_count'],
-                'К удалению (deleted IS NULL): ' . count($idsToDelete),
-                'Первые 50 id: ' . implode(', ', array_slice($idsToDelete, 0, 50)),
-                count($idsToDelete) > 50 ? '...' : '',
-                'Полный список id записан в relation-dedupe-log.txt',
+                'Шаг 2: id на удаление — только дубли от ' . $summary['import_date_label'],
+                'Групп дублей всего: ' . $summary['groups_count'],
+                'К удалению за ' . $summary['import_date_label'] . ': ' . count($deleteList),
+                'Всего active-дублей (любая дата): ' . $summary['to_delete_count'],
+                'Первые 20 записей:',
+                $this->formatDeleteListPreview($deleteList, 20),
+                count($deleteList) > 20 ? '...' : '',
+                'Лог: ' . $this->getDedupeStepLogFile(2),
                 'Для удаления: /relation/dedupe?step=3',
             ]));
         }
 
+        // 3. Удаление позиций из п.2
+        $deleteResult = $this->executeDedupeDelete($idsToDelete);
+        $this->appendDedupeStepLog(3, [
+            'IMPORT_DATE' => self::IMPORT_DUPLICATE_DATE,
+            'IDS_TO_DELETE' => $idsToDelete,
+            'RESULT' => $deleteResult,
+        ]);
+
+        return $this->formatDedupeResponse(implode("\n", [
+            'Шаг 3: удаление завершено (soft delete)',
+            'Дата отбора дублей: ' . self::IMPORT_DUPLICATE_DATE,
+            'К удалению было: ' . count($idsToDelete),
+            'Успешно: ' . $deleteResult['deleted'],
+            'Ошибок / не найдено: ' . $deleteResult['failed'],
+            'Лог: ' . $this->getDedupeStepLogFile(3),
+        ]));
+    }
+
+    /**
+     * @param int[] $idsToDelete
+     * @return array{deleted:int,failed:int,results:array}
+     */
+    private function executeDedupeDelete(array $idsToDelete): array
+    {
         $deleted = 0;
         $failed = 0;
         $results = [];
@@ -225,6 +275,7 @@ class RelationController extends BaseController
                     'status' => 'deleted',
                     'lead_id' => $model->lead_id,
                     'appointment_id' => $model->appointment_id,
+                    'created_at_dt' => $this->formatCreatedAt((int)$model->created_at),
                 ];
             } else {
                 $failed++;
@@ -236,22 +287,46 @@ class RelationController extends BaseController
             }
         }
 
-        $this->logDedupe('step=3 delete_result', [
+        return [
             'deleted' => $deleted,
             'failed' => $failed,
             'results' => $results,
-        ]);
-
-        return $this->formatDedupeResponse(implode("\n", [
-            'Шаг 3: удаление завершено (soft delete)',
-            'Успешно: ' . $deleted,
-            'Ошибок / не найдено: ' . $failed,
-            'Подробности в relation-dedupe-log.txt',
-        ]));
+        ];
     }
 
     /**
-     * @return array<int, array<int, array<int, array>>>
+     * @param int $step 1|2|3
+     * @param array $data
+     */
+    private function appendDedupeStepLog(int $step, array $data): void
+    {
+        $lines = [
+            str_repeat('=', 70),
+            'DEDUPE этап ' . $step . ' @ ' . date('d.m.Y H:i:s'),
+            str_repeat('=', 70),
+            print_r($data, true),
+            '',
+        ];
+
+        file_put_contents($this->getDedupeStepLogFile($step), implode("\n", $lines), FILE_APPEND);
+    }
+
+    /**
+     * @param int $step 1|2|3
+     * @return string
+     */
+    private function getDedupeStepLogFile(int $step): string
+    {
+        return \Yii::getAlias('@webroot/relation-dedupe_step_' . $step . '-log.txt');
+    }
+
+    /**
+     * @return array<int, array{
+     *     lead_id: int,
+     *     appointment_id: int,
+     *     original_appointment: array|null,
+     *     appointments_doubles: array<int, array>
+     * }>
      */
     private function collectDuplicateGroups(): array
     {
@@ -267,21 +342,22 @@ class RelationController extends BaseController
 
         $groups = [];
         foreach($rows as $row) {
-            $groups[$row['lead_id']][$row['appointment_id']][] = [
-                'id' => (int)$row['id'],
-                'lead_id' => (int)$row['lead_id'],
-                'appointment_id' => (int)$row['appointment_id'],
-                'deleted' => $row['deleted'],
-                'created_at' => (int)$row['created_at'],
-            ];
+            $groups[$row['lead_id']][$row['appointment_id']][] = $this->formatRelationRow($row);
         }
 
         $doubles = [];
         foreach($groups as $leadId => $byAppointment) {
             foreach($byAppointment as $appointmentId => $items) {
-                if(count($items) > 1) {
-                    $doubles[$leadId][$appointmentId] = $items;
+                if(count($items) < 2) {
+                    continue;
                 }
+
+                $group = $this->splitDuplicateGroup((int)$leadId, (int)$appointmentId, $items);
+                if(!$group['appointments_doubles']) {
+                    continue;
+                }
+
+                $doubles[] = $group;
             }
         }
 
@@ -289,8 +365,119 @@ class RelationController extends BaseController
     }
 
     /**
-     * Оставляем самую старую запись в группе, остальные активные — на удаление.
+     * @param array $row
+     * @return array{id:int,lead_id:int,appointment_id:int,deleted:mixed,created_at:int}
+     */
+    private function formatRelationRow(array $row): array
+    {
+        $createdAt = (int)$row['created_at'];
+
+        return [
+            'id' => (int)$row['id'],
+            'lead_id' => (int)$row['lead_id'],
+            'appointment_id' => (int)$row['appointment_id'],
+            'deleted' => $row['deleted'],
+            'created_at' => $createdAt,
+            'created_at_dt' => $this->formatCreatedAt($createdAt),
+        ];
+    }
+
+    /**
+     * @param int $timestamp
+     * @return string
+     */
+    private function formatCreatedAt(int $timestamp): string
+    {
+        if($timestamp <= 0) {
+            return '—';
+        }
+
+        return date('d.m.Y H:i:s', $timestamp);
+    }
+
+    /**
+     * original_appointment — запись с deleted=1 (оригинал, снятый при отмене).
+     * appointments_doubles — все записи с deleted IS NULL (подлежат удалению).
      *
+     * @param int $leadId
+     * @param int $appointmentId
+     * @param array<int, array> $items
+     * @return array{
+     *     lead_id: int,
+     *     appointment_id: int,
+     *     original_appointment: array|null,
+     *     appointments_doubles: array<int, array>
+     * }
+     */
+    private function splitDuplicateGroup(int $leadId, int $appointmentId, array $items): array
+    {
+        $original = null;
+        $doubles = [];
+
+        foreach($items as $item) {
+            if($this->isSoftDeletedRelation($item)) {
+                if(!$original || $item['created_at'] < $original['created_at']) {
+                    $original = $item;
+                }
+                continue;
+            }
+
+            if($this->isActiveRelation($item)) {
+                $doubles[] = $item;
+            }
+        }
+
+        return [
+            'lead_id' => $leadId,
+            'appointment_id' => $appointmentId,
+            'original_appointment' => $original,
+            'appointments_doubles' => array_values($doubles),
+        ];
+    }
+
+    /**
+     * @param array $row
+     * @return bool
+     */
+    private function isActiveRelation(array $row): bool
+    {
+        return $row['deleted'] === null || $row['deleted'] === '';
+    }
+
+    /**
+     * @param array $row
+     * @return bool
+     */
+    private function isSoftDeletedRelation(array $row): bool
+    {
+        return (int)$row['deleted'] === 1;
+    }
+
+    /**
+     * @param array $row
+     * @return bool
+     */
+    private function isImportDuplicateRow(array $row): bool
+    {
+        $createdAt = (int)$row['created_at'];
+        $range = $this->getImportDuplicateDateRange();
+
+        return $createdAt >= $range['from'] && $createdAt <= $range['to'];
+    }
+
+    /**
+     * @return array{from:int,to:int,label:string}
+     */
+    private function getImportDuplicateDateRange(): array
+    {
+        return [
+            'from' => strtotime(self::IMPORT_DUPLICATE_DATE . ' 00:00:00'),
+            'to' => strtotime(self::IMPORT_DUPLICATE_DATE . ' 23:59:59'),
+            'label' => date('d.m.Y', strtotime(self::IMPORT_DUPLICATE_DATE)),
+        ];
+    }
+
+    /**
      * @param array $doubles
      * @return int[]
      */
@@ -298,14 +485,10 @@ class RelationController extends BaseController
     {
         $ids = [];
 
-        foreach($doubles as $itemsByAppointment) {
-            foreach($itemsByAppointment as $items) {
-                array_shift($items);
-
-                foreach($items as $item) {
-                    if($item['deleted'] === null || $item['deleted'] === '') {
-                        $ids[] = $item['id'];
-                    }
+        foreach($doubles as $group) {
+            foreach($group['appointments_doubles'] as $item) {
+                if($this->isImportDuplicateRow($item)) {
+                    $ids[] = $item['id'];
                 }
             }
         }
@@ -317,33 +500,44 @@ class RelationController extends BaseController
 
     /**
      * @param array $doubles
-     * @return array{groups_count:int,extra_rows_count:int,active_extra_rows_count:int}
+     * @return array{
+     *     groups_count: int,
+     *     with_original_count: int,
+     *     without_original_count: int,
+     *     to_delete_count: int,
+     *     import_to_delete_count: int,
+     *     import_date_label: string
+     * }
      */
     private function buildDuplicateSummary(array $doubles): array
     {
-        $groupsCount = 0;
-        $extraRows = 0;
-        $activeExtraRows = 0;
+        $withOriginal = 0;
+        $withoutOriginal = 0;
+        $toDelete = 0;
+        $importToDelete = 0;
 
-        foreach($doubles as $itemsByAppointment) {
-            foreach($itemsByAppointment as $items) {
-                $groupsCount++;
-                $keepers = array_shift($items);
-                unset($keepers);
-                $extraRows += count($items);
+        foreach($doubles as $group) {
+            if($group['original_appointment']) {
+                $withOriginal++;
+            } else {
+                $withoutOriginal++;
+            }
 
-                foreach($items as $item) {
-                    if($item['deleted'] === null || $item['deleted'] === '') {
-                        $activeExtraRows++;
-                    }
+            foreach($group['appointments_doubles'] as $item) {
+                $toDelete++;
+                if($this->isImportDuplicateRow($item)) {
+                    $importToDelete++;
                 }
             }
         }
 
         return [
-            'groups_count' => $groupsCount,
-            'extra_rows_count' => $extraRows,
-            'active_extra_rows_count' => $activeExtraRows,
+            'groups_count' => count($doubles),
+            'with_original_count' => $withOriginal,
+            'without_original_count' => $withoutOriginal,
+            'to_delete_count' => $toDelete,
+            'import_to_delete_count' => $importToDelete,
+            'import_date_label' => $this->getImportDuplicateDateRange()['label'],
         ];
     }
 
@@ -355,47 +549,92 @@ class RelationController extends BaseController
     private function formatDuplicateExamples(array $doubles, int $limit = 10): string
     {
         $lines = [];
-        $shown = 0;
 
-        foreach($doubles as $leadId => $itemsByAppointment) {
-            foreach($itemsByAppointment as $appointmentId => $items) {
-                if($shown >= $limit) {
-                    break 2;
-                }
+        foreach(array_slice($doubles, 0, $limit) as $group) {
+            $original = $group['original_appointment'];
+            $dups = $group['appointments_doubles'];
 
-                $ids = array_column($items, 'id');
-                $deletedFlags = array_map(static function ($item) {
-                    return $item['deleted'] === null ? 'null' : (string)$item['deleted'];
-                }, $items);
-
-                $lines[] = sprintf(
-                    '- lead_id=%s appointment_id=%s rows=%s ids=[%s] deleted=[%s]',
-                    $leadId,
-                    $appointmentId,
-                    count($items),
-                    implode(',', $ids),
-                    implode(',', $deletedFlags)
+            if($original) {
+                $originalPart = sprintf(
+                    'original: id=%s deleted=%s created=%s',
+                    $original['id'],
+                    $original['deleted'],
+                    $original['created_at_dt']
                 );
-                $shown++;
+            } else {
+                $originalPart = 'original: — (нет записи с deleted=1)';
             }
+
+            $toDeleteParts = [];
+            foreach($dups as $dup) {
+                $mark = $this->isImportDuplicateRow($dup) ? '[удалить]' : '[пропуск]';
+                $toDeleteParts[] = sprintf(
+                    '%s id=%s created=%s',
+                    $mark,
+                    $dup['id'],
+                    $dup['created_at_dt']
+                );
+            }
+
+            $lines[] = sprintf(
+                "- lead_id=%s appointment_id=%s\n  %s\n  to_delete (%s): %s",
+                $group['lead_id'],
+                $group['appointment_id'],
+                $originalPart,
+                count($dups),
+                $toDeleteParts ? implode('; ', $toDeleteParts) : '—'
+            );
         }
 
         return $lines ? implode("\n", $lines) : '- дублей не найдено';
     }
 
     /**
-     * @param string $title
-     * @param mixed $data
+     * @param array $doubles
+     * @return array<int, array{id:int,lead_id:int,appointment_id:int,created_at_dt:string}>
      */
-    private function logDedupe(string $title, $data): void
+    private function buildDeleteList(array $doubles): array
     {
-        $logFile = \Yii::getAlias('@webroot/relation-dedupe-log.txt');
-        $payload = is_string($data) ? $data : print_r($data, true);
-        file_put_contents(
-            $logFile,
-            date('d.m.Y H:i:s') . ' ' . $title . "\n" . $payload . "\n\n",
-            FILE_APPEND
-        );
+        $list = [];
+
+        foreach($doubles as $group) {
+            foreach($group['appointments_doubles'] as $item) {
+                if(!$this->isImportDuplicateRow($item)) {
+                    continue;
+                }
+
+                $list[] = [
+                    'id' => $item['id'],
+                    'lead_id' => $item['lead_id'],
+                    'appointment_id' => $item['appointment_id'],
+                    'created_at_dt' => $item['created_at_dt'],
+                ];
+            }
+        }
+
+        return $list;
+    }
+
+    /**
+     * @param array $deleteList
+     * @param int $limit
+     * @return string
+     */
+    private function formatDeleteListPreview(array $deleteList, int $limit = 20): string
+    {
+        $lines = [];
+
+        foreach(array_slice($deleteList, 0, $limit) as $item) {
+            $lines[] = sprintf(
+                '- id=%s lead_id=%s appointment_id=%s created=%s',
+                $item['id'],
+                $item['lead_id'],
+                $item['appointment_id'],
+                $item['created_at_dt']
+            );
+        }
+
+        return $lines ? implode("\n", $lines) : '—';
     }
 
     /**
