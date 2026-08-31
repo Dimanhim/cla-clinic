@@ -98,10 +98,13 @@ class Relation extends \app\models\BaseModel
 
     public static function deleteRelation($leadId, $appointmentId)
     {
-        $model = Relation::findOne(['lead_id' => $leadId, 'appointment_id' => $appointmentId]);
-        if(!$model) return false;
-        if(!$model->delete()) {
-            file_put_contents('--relation-errors-log.txt', date('d.m.Y H:i') . ' - delete - ' . print_r($model->errors, true)."\n", FILE_APPEND);
+        $models = Relation::findAll(['lead_id' => $leadId, 'appointment_id' => $appointmentId]);
+        if(!$models) return false;
+
+        foreach($models as $model) {
+            if(!$model->delete()) {
+                file_put_contents('--relation-errors-log.txt', date('d.m.Y H:i') . ' - delete - ' . print_r($model->errors, true)."\n", FILE_APPEND);
+            }
         }
     }
 
