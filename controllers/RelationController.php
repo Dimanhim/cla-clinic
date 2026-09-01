@@ -168,6 +168,11 @@ class RelationController extends BaseController
      */
     public function actionDedupe()
     {
+        return true;
+
+        set_time_limit(0);
+        ini_set('max_execution_time', '0');
+
         $step = (int)$this->request->get('step', 0);
         if(!in_array($step, [1, 2, 3], true)) {
             return $this->formatDedupeResponse(
@@ -189,7 +194,7 @@ class RelationController extends BaseController
         $summary = $this->buildDuplicateSummary($doubles);
         $this->appendDedupeStepLog(1, [
             'SUMMARY' => $summary,
-            'GROUPS' => $doubles,
+            'EXAMPLES' => $this->formatDuplicateExamples($doubles, 10),
         ]);
 
         if($step === 1) {
@@ -215,7 +220,7 @@ class RelationController extends BaseController
             'IMPORT_DATE' => self::IMPORT_DUPLICATE_DATE,
             'COUNT' => count($deleteList),
             'IDS' => $idsToDelete,
-            'DELETE_LIST' => $deleteList,
+            'DELETE_LIST_PREVIEW' => $this->formatDeleteListPreview($deleteList, 20),
         ]);
 
         if($step === 2) {
@@ -236,12 +241,14 @@ class RelationController extends BaseController
         $deleteResult = $this->executeDedupeDelete($idsToDelete);
         $this->appendDedupeStepLog(3, [
             'IMPORT_DATE' => self::IMPORT_DUPLICATE_DATE,
-            'IDS_TO_DELETE' => $idsToDelete,
-            'RESULT' => $deleteResult,
+            'IDS_TO_DELETE_COUNT' => count($idsToDelete),
+            'DELETED' => $deleteResult['deleted'],
+            'FAILED' => $deleteResult['failed'],
+            'RESULT_PREVIEW' => array_slice($deleteResult['results'], 0, 20),
         ]);
 
         return $this->formatDedupeResponse(implode("\n", [
-            'Шаг 3: удаление завершено (soft delete)',
+            'Шаг 3: удаление завершено (soft delete, строки остаются в таблице с deleted=1)',
             'Дата отбора дублей: ' . self::IMPORT_DUPLICATE_DATE,
             'К удалению было: ' . count($idsToDelete),
             'Успешно: ' . $deleteResult['deleted'],
@@ -256,35 +263,31 @@ class RelationController extends BaseController
      */
     private function executeDedupeDelete(array $idsToDelete): array
     {
+        if(!$idsToDelete) {
+            return [
+                'deleted' => 0,
+                'failed' => 0,
+                'results' => [],
+            ];
+        }
+
+        $updatedAt = time();
         $deleted = 0;
-        $failed = 0;
         $results = [];
 
-        foreach($idsToDelete as $id) {
-            $model = Relation::findOne($id);
-            if(!$model) {
-                $failed++;
-                $results[] = ['id' => $id, 'status' => 'not_found'];
-                continue;
-            }
+        foreach(array_chunk($idsToDelete, 500) as $chunk) {
+            $deleted += Relation::updateAll(
+                ['deleted' => 1, 'updated_at' => $updatedAt],
+                ['and', ['id' => $chunk], ['deleted' => null]]
+            );
+        }
 
-            if($model->delete()) {
-                $deleted++;
-                $results[] = [
-                    'id' => $id,
-                    'status' => 'deleted',
-                    'lead_id' => $model->lead_id,
-                    'appointment_id' => $model->appointment_id,
-                    'created_at_dt' => $this->formatCreatedAt((int)$model->created_at),
-                ];
-            } else {
-                $failed++;
-                $results[] = [
-                    'id' => $id,
-                    'status' => 'error',
-                    'errors' => $model->errors,
-                ];
-            }
+        $failed = count($idsToDelete) - $deleted;
+        if($failed > 0) {
+            $results[] = [
+                'status' => 'not_found_or_already_deleted',
+                'count' => $failed,
+            ];
         }
 
         return [
@@ -330,15 +333,21 @@ class RelationController extends BaseController
      */
     private function collectDuplicateGroups(): array
     {
-        $rows = Relation::find()
-            ->orderBy([
-                'lead_id' => SORT_ASC,
-                'appointment_id' => SORT_ASC,
-                'created_at' => SORT_ASC,
-                'id' => SORT_ASC,
-            ])
-            ->asArray()
-            ->all();
+        $rows = \Yii::$app->db->createCommand("
+            SELECT r.id, r.lead_id, r.appointment_id, r.deleted, r.created_at
+            FROM relations r
+            INNER JOIN (
+                SELECT lead_id, appointment_id
+                FROM relations
+                GROUP BY lead_id, appointment_id
+                HAVING COUNT(*) >= 2
+            ) d ON r.lead_id = d.lead_id AND r.appointment_id = d.appointment_id
+            ORDER BY r.lead_id ASC, r.appointment_id ASC, r.created_at ASC, r.id ASC
+        ")->queryAll();
+
+        if(!$rows) {
+            return [];
+        }
 
         $groups = [];
         foreach($rows as $row) {
