@@ -5,6 +5,7 @@ namespace app\controllers;
 use app\components\BaseWebhook;
 use app\models\Relation;
 use app\models\RelationSearch;
+use yii\db\Query;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
@@ -656,5 +657,31 @@ class RelationController extends BaseController
         \Yii::$app->response->headers->set('Content-Type', 'text/plain; charset=UTF-8');
 
         return $text;
+    }
+
+    public function actionAppSweb()
+    {
+        return true;
+        $ids = (new Query())
+            ->select('appointment_id')
+            ->from('relations')
+            ->where([
+                'and',
+                ['>=', 'created_at', strtotime('2026-08-27 11:55:13')],
+                ['<=', 'created_at', strtotime('2026-09-08 14:54:00')],
+                ['deleted' => null]
+            ])
+            ->orderBy('created_at')
+            ->column();
+
+        $json = json_encode([
+            'total' => count($ids),
+            'appointment_ids' => $ids
+        ], JSON_PRETTY_PRINT);
+
+        // Сохраняем в файл
+        file_put_contents('appointment_ids.json', $json);
+
+        echo "Экспортировано " . count($ids) . " записей в runtime/appointment_ids.json\n";
     }
 }

@@ -864,8 +864,8 @@ trait ActionWebHook
             'gender' => $this->_lead['client_gender'] ? ($this->_lead['client_gender'] == 'М' ? 1 : 2) : null,
             'email' => $this->_lead['client_email'],
             'doctor_id' => $this->getMisDoctorId(),
-            'time_start' => date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600),
-            'time_end' => date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600 + $this->getDurationTime() * 60),
+            'time_start' => date('d.m.Y H:i', $this->_lead['custom_datetime']),
+            'time_end' => date('d.m.Y H:i', $this->_lead['custom_datetime'] + $this->getDurationTime() * 60),
             'clinic_id' => $this->getMisClinicId(),
             'is_handled' => true,
         ];
