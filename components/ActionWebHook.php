@@ -612,7 +612,7 @@ trait ActionWebHook
                 }
                     continue 2;
                 case 'time_start' : {
-                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600) ;
+                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime']);
                     $this->addMessage('appointment time_start - '. $this->_appointment['time_start']);
                     $this->addMessage('amo param time_start - '. $amoParam);
                     if(strtotime($amoParam) != strtotime($this->_appointment['time_start'])) {
@@ -622,7 +622,7 @@ trait ActionWebHook
                 }
                     continue 2;
                 case 'time_end' : {
-                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime'] + 3 * 3600 + $this->getDurationTime() * 60);
+                    $amoParam = date('d.m.Y H:i', $this->_lead['custom_datetime'] + $this->getDurationTime() * 60);
                     if($amoParam != $this->_appointment['time_end']) {
                         return 'time_end';
                     }
@@ -1785,7 +1785,7 @@ trait ActionWebHook
                 'field_type' => CustomFieldHelper::FIELD_TYPE_CODE_TEXT,
                 'values' => [
                     [
-                        'value' => strtotime($this->_appointment['time_start']) - 3 * 3600,
+                        'value' => strtotime($this->_appointment['time_start']),
                     ]
                 ]
             ];
